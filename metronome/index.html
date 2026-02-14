@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metronom</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #e0e0e0;
+        }
+
+        .metronome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .circle-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+        }
+
+        svg.ring {
+            width: 280px;
+            height: 280px;
+            transform: rotate(-90deg);
+        }
+
+        .ring-bg {
+            fill: none;
+            stroke: #2a2a4a;
+            stroke-width: 12;
+        }
+
+        .ring-fill {
+            fill: none;
+            stroke: #e94560;
+            stroke-width: 12;
+            stroke-linecap: round;
+            stroke-dasharray: 816.81;
+            stroke-dashoffset: 816.81;
+            transition: none;
+        }
+
+        .beat-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: 700;
+            color: #e94560;
+            user-select: none;
+        }
+
+        .beat-dots {
+            display: flex;
+            gap: 16px;
+        }
+
+        .beat-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #2a2a4a;
+            transition: background 0.08s, transform 0.08s;
+        }
+
+        .beat-dot.active {
+            background: #e94560;
+            transform: scale(1.3);
+        }
+
+        .beat-dot.accent {
+            background: #ff6b81;
+            transform: scale(1.4);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .bpm-control {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .bpm-display {
+            font-size: 28px;
+            font-weight: 600;
+            min-width: 110px;
+            text-align: center;
+        }
+
+        .bpm-display span {
+            font-size: 14px;
+            font-weight: 400;
+            color: #888;
+        }
+
+        .bpm-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid #e94560;
+            background: transparent;
+            color: #e94560;
+            font-size: 22px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .bpm-btn:hover {
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 220px;
+            height: 6px;
+            border-radius: 3px;
+            background: #2a2a4a;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #e94560;
+            cursor: pointer;
+        }
+
+        .start-btn {
+            width: 140px;
+            height: 48px;
+            border-radius: 24px;
+            border: none;
+            background: #e94560;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: background 0.15s, transform 0.1s;
+        }
+
+        .start-btn:hover {
+            background: #d63851;
+        }
+
+        .start-btn:active {
+            transform: scale(0.96);
+        }
+
+        .flash {
+            animation: pulse 0.12s ease-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.15); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="metronome">
+        <div class="circle-container">
+            <svg class="ring" viewBox="0 0 280 280">
+                <circle class="ring-bg" cx="140" cy="140" r="130" />
+                <circle class="ring-fill" cx="140" cy="140" r="130" />
+            </svg>
+            <div class="beat-number">–</div>
+        </div>
+
+        <div class="beat-dots">
+            <div class="beat-dot" data-beat="0"></div>
+            <div class="beat-dot" data-beat="1"></div>
+            <div class="beat-dot" data-beat="2"></div>
+            <div class="beat-dot" data-beat="3"></div>
+        </div>
+
+        <div class="controls">
+            <div class="bpm-control">
+                <button class="bpm-btn" id="bpmDown">−</button>
+                <div class="bpm-display"><span>BPM</span><br>120</div>
+                <button class="bpm-btn" id="bpmUp">+</button>
+            </div>
+            <input type="range" id="bpmSlider" min="30" max="240" value="120">
+            <button class="start-btn" id="startBtn">START</button>
+        </div>
+    </div>
+
+    <script>
+        const ringFill = document.querySelector('.ring-fill');
+        const beatNumber = document.querySelector('.beat-number');
+        const beatDots = document.querySelectorAll('.beat-dot');
+        const bpmDisplay = document.querySelector('.bpm-display');
+        const bpmSlider = document.getElementById('bpmSlider');
+        const startBtn = document.getElementById('startBtn');
+        const bpmDown = document.getElementById('bpmDown');
+        const bpmUp = document.getElementById('bpmUp');
+
+        const CIRCUMFERENCE = 2 * Math.PI * 130; // ~816.81
+        let bpm = 120;
+        let playing = false;
+        let currentBeat = 0;
+        let audioCtx = null;
+        let nextBeatTime = 0;
+        let schedulerTimer = null;
+        let animationFrame = null;
+        let beatTimes = []; // timestamps of scheduled beats
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playClick(time, accent) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (accent) {
+                osc.frequency.value = 1000;
+                gain.gain.value = 0.7;
+            } else {
+                osc.frequency.value = 700;
+                gain.gain.value = 0.5;
+            }
+
+            osc.start(time);
+            osc.stop(time + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+        }
+
+        function getSecondsPerBeat() {
+            return 60 / bpm;
+        }
+
+        function scheduler() {
+            const lookAhead = 0.1; // seconds
+            while (nextBeatTime < audioCtx.currentTime + lookAhead) {
+                const accent = currentBeat === 0;
+                playClick(nextBeatTime, accent);
+                beatTimes.push({ time: nextBeatTime, beat: currentBeat });
+                // Keep only recent entries
+                if (beatTimes.length > 12) beatTimes.splice(0, 4);
+                currentBeat = (currentBeat + 1) % 4;
+                nextBeatTime += getSecondsPerBeat();
+            }
+        }
+
+        function updateVisuals() {
+            if (!playing) return;
+
+            const now = audioCtx.currentTime;
+
+            // Find the most recent beat that has passed
+            let activeBeat = -1;
+            let beatStartTime = 0;
+            for (let i = beatTimes.length - 1; i >= 0; i--) {
+                if (beatTimes[i].time <= now) {
+                    activeBeat = beatTimes[i].beat;
+                    beatStartTime = beatTimes[i].time;
+                    break;
+                }
+            }
+
+            if (activeBeat === -1) {
+                animationFrame = requestAnimationFrame(updateVisuals);
+                return;
+            }
+
+            // Update beat number
+            beatNumber.textContent = activeBeat + 1;
+
+            // Update dots
+            beatDots.forEach((dot, i) => {
+                dot.classList.remove('active', 'accent');
+                if (i === activeBeat) {
+                    dot.classList.add(i === 0 ? 'accent' : 'active');
+                }
+            });
+
+            // Calculate circle fill: progresses by 1/4 per beat, with smooth animation within each beat
+            const spb = getSecondsPerBeat();
+            const elapsed = now - beatStartTime;
+            const beatProgress = Math.min(elapsed / spb, 1);
+
+            // Total progress: completed beats + current beat progress
+            const totalProgress = (activeBeat + beatProgress) / 4;
+            const offset = CIRCUMFERENCE * (1 - totalProgress);
+            ringFill.style.strokeDashoffset = offset;
+
+            animationFrame = requestAnimationFrame(updateVisuals);
+        }
+
+        function start() {
+            initAudio();
+            playing = true;
+            currentBeat = 0;
+            beatTimes = [];
+            nextBeatTime = audioCtx.currentTime + 0.05;
+            ringFill.style.strokeDashoffset = CIRCUMFERENCE;
+
+            schedulerTimer = setInterval(scheduler, 25);
+            animationFrame = requestAnimationFrame(updateVisuals);
+
+            startBtn.textContent = 'STOP';
+        }
+
+        function stop() {
+            playing = false;
+            clearInterval(schedulerTimer);
+            cancelAnimationFrame(animationFrame);
+            schedulerTimer = null;
+            animationFrame = null;
+            beatTimes = [];
+
+            ringFill.style.strokeDashoffset = CIRCUMFERENCE;
+            beatNumber.textContent = '–';
+            beatDots.forEach(d => d.classList.remove('active', 'accent'));
+
+            startBtn.textContent = 'START';
+        }
+
+        function setBpm(val) {
+            bpm = Math.max(30, Math.min(240, val));
+            bpmSlider.value = bpm;
+            bpmDisplay.innerHTML = `<span>BPM</span><br>${bpm}`;
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (playing) stop(); else start();
+        });
+
+        bpmSlider.addEventListener('input', () => setBpm(parseInt(bpmSlider.value)));
+        bpmDown.addEventListener('click', () => setBpm(bpm - 5));
+        bpmUp.addEventListener('click', () => setBpm(bpm + 5));
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (playing) stop(); else start();
+            }
+        });
+    </script>
+</body>
+</html>
