@@ -154,26 +154,78 @@
             cursor: pointer;
         }
 
-        .start-btn {
-            width: 140px;
+        .btn-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .start-btn, .mute-btn, .flash-btn {
             height: 48px;
             border-radius: 24px;
             border: none;
-            background: #e94560;
             color: white;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             letter-spacing: 1px;
             transition: background 0.15s, transform 0.1s;
         }
 
-        .start-btn:hover {
-            background: #d63851;
+        .start-btn {
+            width: 120px;
+            background: #e94560;
         }
 
-        .start-btn:active {
+        .mute-btn {
+            width: 80px;
+            background: #2a2a4a;
+            border: 2px solid #e94560;
+            color: #e94560;
+        }
+
+        .mute-btn.muted {
+            background: #e94560;
+            color: white;
+        }
+
+        .flash-btn {
+            width: 80px;
+            background: #2a2a4a;
+            border: 2px solid #e94560;
+            color: #e94560;
+        }
+
+        .flash-btn.active {
+            background: #e94560;
+            color: white;
+        }
+
+        .start-btn:hover, .mute-btn:hover, .flash-btn:hover {
+            filter: brightness(1.15);
+        }
+
+        .start-btn:active, .mute-btn:active, .flash-btn:active {
             transform: scale(0.96);
+        }
+
+        .screen-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            background: transparent;
+            z-index: 9999;
+            transition: background 0.05s;
+        }
+
+        .screen-flash.on {
+            background: rgba(233, 69, 96, 0.35);
+        }
+
+        .screen-flash.accent {
+            background: rgba(255, 107, 129, 0.5);
         }
 
         .flash {
@@ -211,9 +263,14 @@
                 <button class="bpm-btn" id="bpmUp">+</button>
             </div>
             <input type="range" id="bpmSlider" min="30" max="240" value="120">
-            <button class="start-btn" id="startBtn">START</button>
+            <div class="btn-row">
+                <button class="start-btn" id="startBtn">START</button>
+                <button class="mute-btn" id="muteBtn">MUTE</button>
+                <button class="flash-btn" id="flashBtn">FLASH</button>
+            </div>
         </div>
     </div>
+    <div class="screen-flash" id="screenFlash"></div>
 
     <script>
         const ringFill = document.querySelector('.ring-fill');
@@ -224,10 +281,15 @@
         const startBtn = document.getElementById('startBtn');
         const bpmDown = document.getElementById('bpmDown');
         const bpmUp = document.getElementById('bpmUp');
+        const muteBtn = document.getElementById('muteBtn');
+        const flashBtn = document.getElementById('flashBtn');
+        const screenFlash = document.getElementById('screenFlash');
 
         const CIRCUMFERENCE = 2 * Math.PI * 130; // ~816.81
         let bpm = 120;
         let playing = false;
+        let muted = false;
+        let flashEnabled = false;
         let currentBeat = 0;
         let audioCtx = null;
         let nextBeatTime = 0;
@@ -245,6 +307,7 @@
         }
 
         function playClick(time, accent) {
+            if (muted) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain);
@@ -312,9 +375,19 @@
                 }
             });
 
-            // Calculate circle fill: progresses by 1/4 per beat, with smooth animation within each beat
+            // Flash effect
             const spb = getSecondsPerBeat();
             const elapsed = now - beatStartTime;
+            if (flashEnabled) {
+                if (elapsed < 0.08) {
+                    screenFlash.classList.add('on');
+                    if (activeBeat === 0) screenFlash.classList.add('accent');
+                } else {
+                    screenFlash.classList.remove('on', 'accent');
+                }
+            }
+
+            // Calculate circle fill: progresses by 1/4 per beat, with smooth animation within each beat
             const beatProgress = Math.min(elapsed / spb, 1);
 
             // Total progress: completed beats + current beat progress
@@ -350,6 +423,7 @@
             ringFill.style.strokeDashoffset = CIRCUMFERENCE;
             beatNumber.textContent = '–';
             beatDots.forEach(d => d.classList.remove('active', 'accent'));
+            screenFlash.classList.remove('on', 'accent');
 
             startBtn.textContent = 'START';
         }
@@ -367,6 +441,18 @@
         bpmSlider.addEventListener('input', () => setBpm(parseInt(bpmSlider.value)));
         bpmDown.addEventListener('click', () => setBpm(bpm - 5));
         bpmUp.addEventListener('click', () => setBpm(bpm + 5));
+
+        muteBtn.addEventListener('click', () => {
+            muted = !muted;
+            muteBtn.classList.toggle('muted', muted);
+            muteBtn.textContent = muted ? 'UNMUTE' : 'MUTE';
+        });
+
+        flashBtn.addEventListener('click', () => {
+            flashEnabled = !flashEnabled;
+            flashBtn.classList.toggle('active', flashEnabled);
+            if (!flashEnabled) screenFlash.classList.remove('on', 'accent');
+        });
 
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
