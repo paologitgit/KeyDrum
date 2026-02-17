@@ -1,0 +1,1894 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aufgaben - Todo App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      --font-gothic: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+
+      --bg-primary: #F7F6F3;
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #F0EDE8;
+      --bg-hover: #EDEAE5;
+      --bg-drag-over: #E8F0EA;
+
+      --text-primary: #37352F;
+      --text-secondary: #787774;
+      --text-tertiary: #B4B1AC;
+      --text-on-accent: #FFFFFF;
+
+      --accent: #6B8F71;
+      --accent-hover: #5A7A60;
+      --accent-light: #E8F0EA;
+      --accent-muted: #A3BDA8;
+
+      --danger: #C4756B;
+      --danger-hover: #B0635A;
+
+      --border: #E5E3DF;
+      --border-light: #EDEBE7;
+
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-gothic);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ===================== SIDEBAR ===================== */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-family: var(--font-serif);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .sidebar-header p {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .sidebar-section {
+      padding: 12px 12px 4px;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-tertiary);
+      padding: 0 8px 8px;
+    }
+
+    .group-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px;
+    }
+
+    .group-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s;
+      gap: 8px;
+      user-select: none;
+    }
+
+    .group-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .group-item.active {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .group-item.drag-over {
+      background: var(--bg-drag-over);
+      outline: 2px dashed var(--accent-muted);
+    }
+
+    .group-icon {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .group-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .group-count {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      background: var(--bg-primary);
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    .group-item.active .group-count {
+      background: var(--accent);
+      color: var(--text-on-accent);
+    }
+
+    .group-actions {
+      opacity: 0;
+      display: flex;
+      gap: 2px;
+      transition: opacity 0.15s;
+    }
+
+    .group-item:hover .group-actions {
+      opacity: 1;
+    }
+
+    .group-action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      font-size: 14px;
+      padding: 2px;
+      border-radius: 3px;
+      line-height: 1;
+    }
+
+    .group-action-btn:hover {
+      background: var(--border);
+      color: var(--text-primary);
+    }
+
+    .add-group-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin: 4px 12px 12px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: none;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-family: var(--font-gothic);
+      transition: all 0.15s;
+      width: calc(100% - 24px);
+    }
+
+    .add-group-btn:hover {
+      border-color: var(--accent-muted);
+      color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    /* Calendar Section */
+    .sidebar-calendar {
+      border-top: 1px solid var(--border);
+      padding: 16px;
+    }
+
+    .gcal-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      cursor: pointer;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: var(--font-gothic);
+      width: 100%;
+      transition: all 0.15s;
+    }
+
+    .gcal-btn:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .gcal-btn.connected {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .gcal-icon {
+      font-size: 16px;
+    }
+
+    /* ===================== MAIN ===================== */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .main-header {
+      padding: 24px 32px 16px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--bg-surface);
+    }
+
+    .main-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .main-title {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .main-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--font-gothic);
+      color: var(--text-secondary);
+      transition: all 0.15s;
+    }
+
+    .filter-btn:hover, .filter-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    /* ===================== TASK LIST ===================== */
+    .task-list-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 32px 100px;
+    }
+
+    .add-task-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .add-task-bar:hover {
+      border-color: var(--accent-muted);
+      background: var(--accent-light);
+    }
+
+    .add-task-bar span {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .add-task-bar .plus {
+      font-size: 18px;
+      color: var(--accent);
+      font-weight: 300;
+    }
+
+    /* Task Card */
+    .task-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .task-card:hover {
+      box-shadow: var(--shadow-sm);
+      border-color: var(--border);
+    }
+
+    .task-card.dragging {
+      opacity: 0.5;
+      transform: rotate(1deg);
+    }
+
+    .task-card.drag-over-task {
+      border-top: 2px solid var(--accent);
+    }
+
+    .task-card.completed .task-title {
+      text-decoration: line-through;
+      color: var(--text-tertiary);
+    }
+
+    .task-main {
+      display: flex;
+      align-items: flex-start;
+      padding: 12px 16px;
+      gap: 12px;
+    }
+
+    .drag-handle {
+      cursor: grab;
+      color: var(--text-tertiary);
+      padding: 2px 0;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      user-select: none;
+    }
+
+    .task-card:hover .drag-handle {
+      opacity: 1;
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .task-checkbox {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-top: 2px;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .task-checkbox:hover {
+      border-color: var(--accent);
+    }
+
+    .task-checkbox.checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .task-checkbox.checked::after {
+      content: '\2713';
+      color: white;
+      font-size: 11px;
+    }
+
+    .task-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .task-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .task-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .task-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .task-meta-item.overdue {
+      color: var(--danger);
+    }
+
+    .task-meta-item.has-reminder {
+      color: var(--accent);
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .task-card:hover .task-actions {
+      opacity: 1;
+    }
+
+    .task-action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      font-size: 14px;
+      padding: 4px;
+      border-radius: 3px;
+      line-height: 1;
+    }
+
+    .task-action-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .task-action-btn.delete:hover {
+      color: var(--danger);
+    }
+
+    /* Subtasks */
+    .subtask-section {
+      border-top: 1px solid var(--border-light);
+      padding: 8px 16px 8px 58px;
+    }
+
+    .subtask-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+
+    .subtask-checkbox {
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 3px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .subtask-checkbox:hover {
+      border-color: var(--accent);
+    }
+
+    .subtask-checkbox.checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .subtask-checkbox.checked::after {
+      content: '\2713';
+      color: white;
+      font-size: 9px;
+    }
+
+    .subtask-title {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .subtask-item.completed .subtask-title {
+      text-decoration: line-through;
+      color: var(--text-tertiary);
+    }
+
+    .subtask-delete {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      padding: 2px;
+    }
+
+    .subtask-item:hover .subtask-delete {
+      opacity: 1;
+    }
+
+    .subtask-delete:hover {
+      color: var(--danger);
+    }
+
+    .add-subtask-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+
+    .add-subtask-input {
+      flex: 1;
+      border: none;
+      border-bottom: 1px solid var(--border-light);
+      background: transparent;
+      padding: 4px 0;
+      font-size: 13px;
+      font-family: var(--font-gothic);
+      color: var(--text-primary);
+      outline: none;
+    }
+
+    .add-subtask-input:focus {
+      border-color: var(--accent);
+    }
+
+    .add-subtask-input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .subtask-progress {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .subtask-progress-bar {
+      width: 40px;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .subtask-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    /* ===================== MODAL ===================== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s;
+    }
+
+    .modal-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--bg-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      width: 500px;
+      max-width: 90vw;
+      max-height: 85vh;
+      overflow-y: auto;
+      transform: translateY(10px);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.visible .modal {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 0;
+    }
+
+    .modal-title {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 20px 24px 24px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .form-input, .form-textarea, .form-select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: var(--font-gothic);
+      color: var(--text-primary);
+      background: var(--bg-surface);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: var(--accent);
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-input::placeholder, .form-textarea::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 8px;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font-gothic);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--text-on-accent);
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border-color: var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .btn-danger {
+      background: var(--bg-surface);
+      color: var(--danger);
+      border-color: var(--border);
+    }
+
+    .btn-danger:hover {
+      background: var(--danger);
+      color: var(--text-on-accent);
+      border-color: var(--danger);
+    }
+
+    .btn-cal {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* ===================== EMPTY STATE ===================== */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-tertiary);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+    }
+
+    /* ===================== TOAST ===================== */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      background: var(--text-primary);
+      color: var(--bg-primary);
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      box-shadow: var(--shadow-lg);
+      animation: toast-in 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toast.toast-out {
+      animation: toast-out 0.3s ease forwards;
+    }
+
+    @keyframes toast-in {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes toast-out {
+      from { transform: translateY(0); opacity: 1; }
+      to { transform: translateY(20px); opacity: 0; }
+    }
+
+    /* ===================== SCROLLBAR ===================== */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-tertiary);
+    }
+
+    /* ===================== INLINE EDIT ===================== */
+    .inline-edit-input {
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+      color: inherit;
+      width: 100%;
+      outline: none;
+      padding: 0;
+      border-bottom: 1px solid var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Aufgaben</h1>
+        <p>Organisiere deinen Tag</p>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Gruppen</div>
+      </div>
+
+      <div class="group-list" id="groupList"></div>
+
+      <button class="add-group-btn" id="addGroupBtn" onclick="addGroup()">
+        <span class="plus">+</span> Neue Gruppe
+      </button>
+
+      <div class="sidebar-calendar">
+        <button class="gcal-btn" id="gcalBtn" onclick="handleCalendarAuth()">
+          <span class="gcal-icon">&#128197;</span>
+          <span id="gcalBtnText">Google Kalender verbinden</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <div class="main-header">
+        <div class="main-header-top">
+          <div>
+            <h2 class="main-title" id="mainTitle">Alle Aufgaben</h2>
+            <p class="main-subtitle" id="mainSubtitle"></p>
+          </div>
+          <div class="header-actions">
+            <button class="filter-btn" onclick="toggleFilter('all')" id="filterAll">Alle</button>
+            <button class="filter-btn" onclick="toggleFilter('active')" id="filterActive">Offen</button>
+            <button class="filter-btn" onclick="toggleFilter('completed')" id="filterCompleted">Erledigt</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-list-container" id="taskListContainer">
+        <div class="add-task-bar" onclick="openTaskModal()">
+          <span class="plus">+</span>
+          <span>Neue Aufgabe erstellen...</span>
+        </div>
+        <div id="taskList"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Task Modal -->
+  <div class="modal-overlay" id="taskModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">Neue Aufgabe</h3>
+        <button class="modal-close" onclick="closeTaskModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Titel</label>
+          <input type="text" class="form-input" id="taskTitleInput" placeholder="Was muss erledigt werden?">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Beschreibung</label>
+          <textarea class="form-textarea" id="taskDescInput" placeholder="Weitere Details..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Gruppe</label>
+            <select class="form-select" id="taskGroupSelect"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Faellig am</label>
+            <input type="date" class="form-input" id="taskDueDateInput">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Erinnerung</label>
+            <input type="datetime-local" class="form-input" id="taskReminderInput">
+          </div>
+          <div class="form-group" id="calendarSyncGroup" style="display:none">
+            <label class="form-label">Google Kalender</label>
+            <button class="btn btn-secondary btn-cal" id="syncCalBtn" onclick="syncTaskToCalendar()" type="button">
+              &#128197; Im Kalender eintragen
+            </button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeTaskModal()">Abbrechen</button>
+          <button class="btn btn-danger" id="deleteTaskBtn" onclick="deleteCurrentTask()" style="display:none">Loeschen</button>
+          <button class="btn btn-primary" onclick="saveTask()" id="saveTaskBtn">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Group Modal -->
+  <div class="modal-overlay" id="groupModal">
+    <div class="modal" style="width:380px">
+      <div class="modal-header">
+        <h3 class="modal-title" id="groupModalTitle">Neue Gruppe</h3>
+        <button class="modal-close" onclick="closeGroupModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-input" id="groupNameInput" placeholder="Gruppenname...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Farbe</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap" id="colorPicker"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeGroupModal()">Abbrechen</button>
+          <button class="btn btn-primary" onclick="saveGroup()">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Google API -->
+  <script src="https://apis.google.com/js/api.js" defer></script>
+  <script src="https://accounts.google.com/gsi/client" defer></script>
+
+  <script>
+    // ===================== CONFIG =====================
+    // To use Google Calendar integration, create credentials at
+    // https://console.cloud.google.com/ and fill in your values:
+    const GOOGLE_CLIENT_ID = '';  // Your OAuth 2.0 Client ID
+    const GOOGLE_API_KEY = '';    // Your API Key
+    const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+    const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
+
+    // ===================== STATE =====================
+    let state = {
+      groups: [],
+      tasks: [],
+      activeGroupId: null,
+      filter: 'all',
+      editingTaskId: null,
+      gcalConnected: false,
+    };
+
+    const GROUP_COLORS = [
+      '#6B8F71', '#8B7B6B', '#7B8FA1', '#A18B7B',
+      '#8F7BA1', '#7BA18B', '#A1887B', '#7B96A1',
+      '#9B8B7B', '#7BA17B', '#A17B8B', '#7B8BA1'
+    ];
+
+    let selectedGroupColor = GROUP_COLORS[0];
+    let editingGroupId = null;
+    let tokenClient = null;
+    let gapiInited = false;
+    let gisInited = false;
+
+    // ===================== PERSISTENCE =====================
+    function loadState() {
+      try {
+        const saved = localStorage.getItem('todoAppState');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          state.groups = parsed.groups || [];
+          state.tasks = parsed.tasks || [];
+        }
+      } catch(e) {
+        console.error('Failed to load state:', e);
+      }
+
+      if (state.groups.length === 0) {
+        state.groups = [
+          { id: generateId(), name: 'Allgemein', color: '#6B8F71' },
+          { id: generateId(), name: 'Arbeit', color: '#7B8FA1' },
+          { id: generateId(), name: 'Persoenlich', color: '#A18B7B' },
+        ];
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem('todoAppState', JSON.stringify({
+        groups: state.groups,
+        tasks: state.tasks,
+      }));
+    }
+
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+    }
+
+    // ===================== RENDERING =====================
+    function render() {
+      renderGroups();
+      renderTasks();
+      updateSubtitle();
+      saveState();
+    }
+
+    function renderGroups() {
+      const list = document.getElementById('groupList');
+      const allCount = state.tasks.filter(t => state.filter === 'all' || (state.filter === 'active' ? !t.completed : t.completed)).length;
+
+      let html = `
+        <div class="group-item ${state.activeGroupId === null ? 'active' : ''}"
+             onclick="selectGroup(null)"
+             ondragover="groupDragOver(event, null)"
+             ondragleave="groupDragLeave(event)"
+             ondrop="groupDrop(event, null)">
+          <div class="group-icon" style="background: var(--text-secondary)"></div>
+          <span class="group-name">Alle Aufgaben</span>
+          <span class="group-count">${state.tasks.length}</span>
+        </div>
+      `;
+
+      state.groups.forEach(g => {
+        const count = state.tasks.filter(t => t.groupId === g.id).length;
+        html += `
+          <div class="group-item ${state.activeGroupId === g.id ? 'active' : ''}"
+               onclick="selectGroup('${g.id}')"
+               ondragover="groupDragOver(event, '${g.id}')"
+               ondragleave="groupDragLeave(event)"
+               ondrop="groupDrop(event, '${g.id}')"
+               data-group-id="${g.id}">
+            <div class="group-icon" style="background: ${g.color}"></div>
+            <span class="group-name">${escapeHtml(g.name)}</span>
+            <span class="group-count">${count}</span>
+            <div class="group-actions">
+              <button class="group-action-btn" onclick="event.stopPropagation(); editGroup('${g.id}')" title="Bearbeiten">&#9998;</button>
+              <button class="group-action-btn" onclick="event.stopPropagation(); deleteGroup('${g.id}')" title="Loeschen">&times;</button>
+            </div>
+          </div>
+        `;
+      });
+
+      list.innerHTML = html;
+    }
+
+    function renderTasks() {
+      const container = document.getElementById('taskList');
+      let tasks = getFilteredTasks();
+
+      if (tasks.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">&#9744;</div>
+            <h3>Keine Aufgaben</h3>
+            <p>Erstelle eine neue Aufgabe, um loszulegen.</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      tasks.forEach((task, index) => {
+        const group = state.groups.find(g => g.id === task.groupId);
+        const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+        const hasReminder = task.reminder && new Date(task.reminder) > new Date();
+        const subtasks = task.subtasks || [];
+        const completedSubtasks = subtasks.filter(s => s.completed).length;
+
+        html += `
+          <div class="task-card ${task.completed ? 'completed' : ''}"
+               draggable="true"
+               data-task-id="${task.id}"
+               ondragstart="taskDragStart(event, '${task.id}')"
+               ondragend="taskDragEnd(event)"
+               ondragover="taskDragOver(event, '${task.id}')"
+               ondragleave="taskDragLeave(event)"
+               ondrop="taskDrop(event, '${task.id}')">
+            <div class="task-main">
+              <div class="drag-handle" title="Ziehen zum Verschieben">&#8942;&#8942;</div>
+              <div class="task-checkbox ${task.completed ? 'checked' : ''}"
+                   onclick="toggleTask('${task.id}')"></div>
+              <div class="task-content">
+                <div class="task-title">${escapeHtml(task.title)}</div>
+                <div class="task-meta">
+                  ${group ? `<span class="task-meta-item"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${group.color}"></span> ${escapeHtml(group.name)}</span>` : ''}
+                  ${task.dueDate ? `<span class="task-meta-item ${isOverdue ? 'overdue' : ''}">&#128197; ${formatDate(task.dueDate)}</span>` : ''}
+                  ${hasReminder ? `<span class="task-meta-item has-reminder">&#128276; ${formatDateTime(task.reminder)}</span>` : ''}
+                  ${subtasks.length > 0 ? `
+                    <span class="task-meta-item">
+                      <span class="subtask-progress">
+                        <span class="subtask-progress-bar">
+                          <span class="subtask-progress-fill" style="width:${subtasks.length ? (completedSubtasks/subtasks.length*100) : 0}%"></span>
+                        </span>
+                        ${completedSubtasks}/${subtasks.length}
+                      </span>
+                    </span>
+                  ` : ''}
+                </div>
+              </div>
+              <div class="task-actions">
+                <button class="task-action-btn" onclick="editTask('${task.id}')" title="Bearbeiten">&#9998;</button>
+                <button class="task-action-btn" onclick="toggleSubtasks('${task.id}')" title="Unteraufgaben">&#9776;</button>
+                <button class="task-action-btn delete" onclick="deleteTask('${task.id}')" title="Loeschen">&times;</button>
+              </div>
+            </div>
+            <div class="subtask-section" id="subtasks-${task.id}" style="display:none">
+              ${renderSubtasks(task)}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+
+      // Restore expanded subtask sections
+      tasks.forEach(task => {
+        if (task._subtasksExpanded) {
+          const section = document.getElementById(`subtasks-${task.id}`);
+          if (section) section.style.display = 'block';
+        }
+      });
+    }
+
+    function renderSubtasks(task) {
+      const subtasks = task.subtasks || [];
+      let html = '';
+
+      subtasks.forEach((st, i) => {
+        html += `
+          <div class="subtask-item ${st.completed ? 'completed' : ''}">
+            <div class="subtask-checkbox ${st.completed ? 'checked' : ''}"
+                 onclick="toggleSubtask('${task.id}', ${i})"></div>
+            <span class="subtask-title">${escapeHtml(st.title)}</span>
+            <button class="subtask-delete" onclick="deleteSubtask('${task.id}', ${i})">&times;</button>
+          </div>
+        `;
+      });
+
+      html += `
+        <div class="add-subtask-row">
+          <input type="text" class="add-subtask-input" placeholder="Unteraufgabe hinzufuegen..."
+                 onkeydown="if(event.key==='Enter') addSubtask('${task.id}', this)">
+        </div>
+      `;
+
+      return html;
+    }
+
+    function updateSubtitle() {
+      const tasks = getFilteredTasks();
+      const completed = tasks.filter(t => t.completed).length;
+      const subtitle = document.getElementById('mainSubtitle');
+      subtitle.textContent = `${tasks.length} Aufgaben, ${completed} erledigt`;
+
+      const title = document.getElementById('mainTitle');
+      if (state.activeGroupId) {
+        const group = state.groups.find(g => g.id === state.activeGroupId);
+        title.textContent = group ? group.name : 'Alle Aufgaben';
+      } else {
+        title.textContent = 'Alle Aufgaben';
+      }
+    }
+
+    function getFilteredTasks() {
+      let tasks = state.tasks;
+
+      if (state.activeGroupId) {
+        tasks = tasks.filter(t => t.groupId === state.activeGroupId);
+      }
+
+      if (state.filter === 'active') {
+        tasks = tasks.filter(t => !t.completed);
+      } else if (state.filter === 'completed') {
+        tasks = tasks.filter(t => t.completed);
+      }
+
+      return tasks;
+    }
+
+    // ===================== GROUPS =====================
+    function selectGroup(groupId) {
+      state.activeGroupId = groupId;
+      render();
+    }
+
+    function addGroup() {
+      editingGroupId = null;
+      selectedGroupColor = GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)];
+      document.getElementById('groupNameInput').value = '';
+      document.getElementById('groupModalTitle').textContent = 'Neue Gruppe';
+      renderColorPicker();
+      openModal('groupModal');
+    }
+
+    function editGroup(id) {
+      const group = state.groups.find(g => g.id === id);
+      if (!group) return;
+      editingGroupId = id;
+      selectedGroupColor = group.color;
+      document.getElementById('groupNameInput').value = group.name;
+      document.getElementById('groupModalTitle').textContent = 'Gruppe bearbeiten';
+      renderColorPicker();
+      openModal('groupModal');
+    }
+
+    function deleteGroup(id) {
+      if (!confirm('Gruppe und alle zugehoerigen Aufgaben loeschen?')) return;
+      state.groups = state.groups.filter(g => g.id !== id);
+      state.tasks = state.tasks.filter(t => t.groupId !== id);
+      if (state.activeGroupId === id) state.activeGroupId = null;
+      render();
+      showToast('Gruppe geloescht');
+    }
+
+    function saveGroup() {
+      const name = document.getElementById('groupNameInput').value.trim();
+      if (!name) return;
+
+      if (editingGroupId) {
+        const group = state.groups.find(g => g.id === editingGroupId);
+        if (group) {
+          group.name = name;
+          group.color = selectedGroupColor;
+        }
+      } else {
+        state.groups.push({
+          id: generateId(),
+          name: name,
+          color: selectedGroupColor,
+        });
+      }
+
+      closeGroupModal();
+      render();
+      showToast(editingGroupId ? 'Gruppe aktualisiert' : 'Gruppe erstellt');
+    }
+
+    function renderColorPicker() {
+      const container = document.getElementById('colorPicker');
+      container.innerHTML = GROUP_COLORS.map(c => `
+        <div style="width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;
+                    border:3px solid ${c === selectedGroupColor ? 'var(--text-primary)' : 'transparent'};
+                    transition: border-color 0.15s"
+             onclick="selectColor('${c}')"></div>
+      `).join('');
+    }
+
+    function selectColor(color) {
+      selectedGroupColor = color;
+      renderColorPicker();
+    }
+
+    // ===================== TASKS =====================
+    function openTaskModal(taskId) {
+      state.editingTaskId = taskId || null;
+      const modal = document.getElementById('taskModal');
+      const title = document.getElementById('modalTitle');
+      const deleteBtn = document.getElementById('deleteTaskBtn');
+      const calGroup = document.getElementById('calendarSyncGroup');
+
+      // Populate group select
+      const select = document.getElementById('taskGroupSelect');
+      select.innerHTML = state.groups.map(g =>
+        `<option value="${g.id}">${escapeHtml(g.name)}</option>`
+      ).join('');
+
+      if (taskId) {
+        const task = state.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        title.textContent = 'Aufgabe bearbeiten';
+        deleteBtn.style.display = 'inline-block';
+        document.getElementById('taskTitleInput').value = task.title;
+        document.getElementById('taskDescInput').value = task.description || '';
+        select.value = task.groupId;
+        document.getElementById('taskDueDateInput').value = task.dueDate || '';
+        document.getElementById('taskReminderInput').value = task.reminder || '';
+      } else {
+        title.textContent = 'Neue Aufgabe';
+        deleteBtn.style.display = 'none';
+        document.getElementById('taskTitleInput').value = '';
+        document.getElementById('taskDescInput').value = '';
+        if (state.activeGroupId) {
+          select.value = state.activeGroupId;
+        }
+        document.getElementById('taskDueDateInput').value = '';
+        document.getElementById('taskReminderInput').value = '';
+      }
+
+      calGroup.style.display = state.gcalConnected ? 'block' : 'none';
+      openModal('taskModal');
+      setTimeout(() => document.getElementById('taskTitleInput').focus(), 100);
+    }
+
+    function closeTaskModal() {
+      closeModal('taskModal');
+      state.editingTaskId = null;
+    }
+
+    function saveTask() {
+      const title = document.getElementById('taskTitleInput').value.trim();
+      if (!title) {
+        showToast('Bitte einen Titel eingeben');
+        return;
+      }
+
+      const taskData = {
+        title,
+        description: document.getElementById('taskDescInput').value.trim(),
+        groupId: document.getElementById('taskGroupSelect').value,
+        dueDate: document.getElementById('taskDueDateInput').value,
+        reminder: document.getElementById('taskReminderInput').value,
+      };
+
+      if (state.editingTaskId) {
+        const task = state.tasks.find(t => t.id === state.editingTaskId);
+        if (task) {
+          Object.assign(task, taskData);
+          if (task.reminder) scheduleReminder(task);
+        }
+        showToast('Aufgabe aktualisiert');
+      } else {
+        const newTask = {
+          id: generateId(),
+          ...taskData,
+          completed: false,
+          subtasks: [],
+          createdAt: new Date().toISOString(),
+        };
+        state.tasks.unshift(newTask);
+        if (newTask.reminder) scheduleReminder(newTask);
+        showToast('Aufgabe erstellt');
+      }
+
+      closeTaskModal();
+      render();
+    }
+
+    function editTask(id) {
+      openTaskModal(id);
+    }
+
+    function deleteTask(id) {
+      state.tasks = state.tasks.filter(t => t.id !== id);
+      render();
+      showToast('Aufgabe geloescht');
+    }
+
+    function deleteCurrentTask() {
+      if (state.editingTaskId) {
+        deleteTask(state.editingTaskId);
+        closeTaskModal();
+      }
+    }
+
+    function toggleTask(id) {
+      const task = state.tasks.find(t => t.id === id);
+      if (task) {
+        task.completed = !task.completed;
+        render();
+      }
+    }
+
+    // ===================== SUBTASKS =====================
+    function toggleSubtasks(taskId) {
+      const section = document.getElementById(`subtasks-${taskId}`);
+      const task = state.tasks.find(t => t.id === taskId);
+      if (section && task) {
+        const isVisible = section.style.display !== 'none';
+        section.style.display = isVisible ? 'none' : 'block';
+        task._subtasksExpanded = !isVisible;
+      }
+    }
+
+    function addSubtask(taskId, input) {
+      const title = input.value.trim();
+      if (!title) return;
+
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      if (!task.subtasks) task.subtasks = [];
+
+      task.subtasks.push({ title, completed: false });
+      input.value = '';
+      task._subtasksExpanded = true;
+      render();
+      // Re-expand and focus
+      const section = document.getElementById(`subtasks-${taskId}`);
+      if (section) section.style.display = 'block';
+      const newInput = section.querySelector('.add-subtask-input');
+      if (newInput) newInput.focus();
+    }
+
+    function toggleSubtask(taskId, index) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (task && task.subtasks[index] !== undefined) {
+        task.subtasks[index].completed = !task.subtasks[index].completed;
+        task._subtasksExpanded = true;
+        render();
+        const section = document.getElementById(`subtasks-${taskId}`);
+        if (section) section.style.display = 'block';
+      }
+    }
+
+    function deleteSubtask(taskId, index) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (task && task.subtasks) {
+        task.subtasks.splice(index, 1);
+        task._subtasksExpanded = true;
+        render();
+        const section = document.getElementById(`subtasks-${taskId}`);
+        if (section) section.style.display = 'block';
+      }
+    }
+
+    // ===================== DRAG & DROP =====================
+    let draggedTaskId = null;
+
+    function taskDragStart(event, taskId) {
+      draggedTaskId = taskId;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', taskId);
+      setTimeout(() => {
+        event.target.classList.add('dragging');
+      }, 0);
+    }
+
+    function taskDragEnd(event) {
+      event.target.classList.remove('dragging');
+      draggedTaskId = null;
+      document.querySelectorAll('.drag-over-task').forEach(el => el.classList.remove('drag-over-task'));
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function taskDragOver(event, taskId) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (draggedTaskId && draggedTaskId !== taskId) {
+        const card = event.target.closest('.task-card');
+        if (card) card.classList.add('drag-over-task');
+      }
+    }
+
+    function taskDragLeave(event) {
+      const card = event.target.closest('.task-card');
+      if (card) card.classList.remove('drag-over-task');
+    }
+
+    function taskDrop(event, targetTaskId) {
+      event.preventDefault();
+      const card = event.target.closest('.task-card');
+      if (card) card.classList.remove('drag-over-task');
+
+      if (!draggedTaskId || draggedTaskId === targetTaskId) return;
+
+      const fromIndex = state.tasks.findIndex(t => t.id === draggedTaskId);
+      const toIndex = state.tasks.findIndex(t => t.id === targetTaskId);
+
+      if (fromIndex === -1 || toIndex === -1) return;
+
+      // Move the dragged task to the target position
+      const [movedTask] = state.tasks.splice(fromIndex, 1);
+
+      // If target task is in a different group, move to that group
+      const targetTask = state.tasks[toIndex > fromIndex ? toIndex - 1 : toIndex];
+      if (targetTask && movedTask.groupId !== targetTask.groupId) {
+        movedTask.groupId = targetTask.groupId;
+      }
+
+      state.tasks.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, movedTask);
+      render();
+    }
+
+    function groupDragOver(event, groupId) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const item = event.target.closest('.group-item');
+      if (item) item.classList.add('drag-over');
+    }
+
+    function groupDragLeave(event) {
+      const item = event.target.closest('.group-item');
+      if (item) item.classList.remove('drag-over');
+    }
+
+    function groupDrop(event, groupId) {
+      event.preventDefault();
+      const item = event.target.closest('.group-item');
+      if (item) item.classList.remove('drag-over');
+
+      if (!draggedTaskId) return;
+
+      const task = state.tasks.find(t => t.id === draggedTaskId);
+      if (task && groupId) {
+        task.groupId = groupId;
+        showToast('Aufgabe verschoben');
+        render();
+      }
+    }
+
+    // ===================== FILTER =====================
+    function toggleFilter(filter) {
+      state.filter = filter;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`filter${filter.charAt(0).toUpperCase() + filter.slice(1)}`).classList.add('active');
+      render();
+    }
+
+    // ===================== REMINDERS =====================
+    const activeReminders = new Map();
+
+    function scheduleReminder(task) {
+      // Clear existing reminder for this task
+      if (activeReminders.has(task.id)) {
+        clearTimeout(activeReminders.get(task.id));
+        activeReminders.delete(task.id);
+      }
+
+      if (!task.reminder) return;
+
+      const reminderTime = new Date(task.reminder).getTime();
+      const now = Date.now();
+      const delay = reminderTime - now;
+
+      if (delay <= 0) return; // Already past
+
+      const timeoutId = setTimeout(() => {
+        showNotification(task);
+        activeReminders.delete(task.id);
+      }, delay);
+
+      activeReminders.set(task.id, timeoutId);
+    }
+
+    function showNotification(task) {
+      // In-app toast
+      showToast(`Erinnerung: ${task.title}`, 8000);
+
+      // Browser notification
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('Aufgaben-Erinnerung', {
+            body: task.title,
+            icon: '&#128203;',
+          });
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              new Notification('Aufgaben-Erinnerung', {
+                body: task.title,
+              });
+            }
+          });
+        }
+      }
+    }
+
+    function initReminders() {
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      // Schedule all existing reminders
+      state.tasks.forEach(task => {
+        if (task.reminder && !task.completed) {
+          scheduleReminder(task);
+        }
+      });
+
+      // Check for reminders every minute
+      setInterval(() => {
+        const now = Date.now();
+        state.tasks.forEach(task => {
+          if (task.reminder && !task.completed) {
+            const reminderTime = new Date(task.reminder).getTime();
+            if (reminderTime <= now && reminderTime > now - 60000) {
+              showNotification(task);
+            }
+          }
+        });
+      }, 60000);
+    }
+
+    // ===================== GOOGLE CALENDAR =====================
+    function gapiLoaded() {
+      gapi.load('client', async () => {
+        if (!GOOGLE_API_KEY) return;
+        try {
+          await gapi.client.init({
+            apiKey: GOOGLE_API_KEY,
+            discoveryDocs: [DISCOVERY_DOC],
+          });
+          gapiInited = true;
+          maybeEnableCalendar();
+        } catch (e) {
+          console.error('GAPI init error:', e);
+        }
+      });
+    }
+
+    function gisLoaded() {
+      if (!GOOGLE_CLIENT_ID) return;
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: SCOPES,
+        callback: (resp) => {
+          if (resp.error) {
+            console.error('GIS error:', resp);
+            return;
+          }
+          state.gcalConnected = true;
+          updateCalendarUI();
+          showToast('Google Kalender verbunden');
+        },
+      });
+      gisInited = true;
+      maybeEnableCalendar();
+    }
+
+    function maybeEnableCalendar() {
+      // Nothing extra needed
+    }
+
+    function handleCalendarAuth() {
+      if (!GOOGLE_CLIENT_ID || !GOOGLE_API_KEY) {
+        showToast('Google API Zugangsdaten nicht konfiguriert. Bitte Client ID und API Key in der Datei eintragen.');
+        return;
+      }
+
+      if (!gapiInited || !gisInited) {
+        showToast('Google API wird geladen...');
+        return;
+      }
+
+      if (state.gcalConnected) {
+        // Disconnect
+        google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token, () => {
+          gapi.client.setToken(null);
+          state.gcalConnected = false;
+          updateCalendarUI();
+          showToast('Google Kalender getrennt');
+        });
+        return;
+      }
+
+      // Request access
+      if (gapi.client.getToken() === null) {
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+      } else {
+        tokenClient.requestAccessToken({ prompt: '' });
+      }
+    }
+
+    function updateCalendarUI() {
+      const btn = document.getElementById('gcalBtn');
+      const text = document.getElementById('gcalBtnText');
+      const calGroup = document.getElementById('calendarSyncGroup');
+
+      if (state.gcalConnected) {
+        btn.classList.add('connected');
+        text.textContent = 'Kalender verbunden';
+      } else {
+        btn.classList.remove('connected');
+        text.textContent = 'Google Kalender verbinden';
+      }
+    }
+
+    async function syncTaskToCalendar() {
+      if (!state.gcalConnected) {
+        showToast('Bitte zuerst Google Kalender verbinden');
+        return;
+      }
+
+      const title = document.getElementById('taskTitleInput').value.trim();
+      const dueDate = document.getElementById('taskDueDateInput').value;
+      const description = document.getElementById('taskDescInput').value.trim();
+
+      if (!title) {
+        showToast('Bitte zuerst einen Titel eingeben');
+        return;
+      }
+
+      if (!dueDate) {
+        showToast('Bitte ein Datum eingeben, um im Kalender einzutragen');
+        return;
+      }
+
+      try {
+        const event = {
+          summary: title,
+          description: description || '',
+          start: {
+            date: dueDate,
+          },
+          end: {
+            date: dueDate,
+          },
+          reminders: {
+            useDefault: false,
+            overrides: [
+              { method: 'popup', minutes: 60 },
+            ],
+          },
+        };
+
+        const response = await gapi.client.calendar.events.insert({
+          calendarId: 'primary',
+          resource: event,
+        });
+
+        showToast('Im Google Kalender eingetragen');
+      } catch (e) {
+        console.error('Calendar sync error:', e);
+        showToast('Fehler beim Eintragen in den Kalender');
+      }
+    }
+
+    // ===================== MODALS =====================
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      modal.classList.add('visible');
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal(id);
+      });
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('visible');
+    }
+
+    function closeGroupModal() {
+      closeModal('groupModal');
+      editingGroupId = null;
+    }
+
+    // ===================== TOAST =====================
+    function showToast(message, duration = 3000) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('toast-out');
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    // ===================== UTILITIES =====================
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatDateTime(dtStr) {
+      if (!dtStr) return '';
+      const d = new Date(dtStr);
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' +
+             d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ===================== KEYBOARD SHORTCUTS =====================
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal('taskModal');
+        closeModal('groupModal');
+      }
+      // Ctrl+N / Cmd+N to create new task
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        openTaskModal();
+      }
+    });
+
+    // ===================== INIT =====================
+    function init() {
+      loadState();
+      toggleFilter('all');
+      render();
+      initReminders();
+
+      // Init Google API if credentials are provided
+      if (GOOGLE_API_KEY && GOOGLE_CLIENT_ID) {
+        if (typeof gapi !== 'undefined') gapiLoaded();
+        if (typeof google !== 'undefined' && google.accounts) gisLoaded();
+      }
+    }
+
+    // Wait for DOM
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Google API callbacks
+    window.addEventListener('load', () => {
+      if (GOOGLE_API_KEY && GOOGLE_CLIENT_ID) {
+        setTimeout(() => {
+          if (typeof gapi !== 'undefined') gapiLoaded();
+          if (typeof google !== 'undefined' && google.accounts) gisLoaded();
+        }, 500);
+      }
+    });
+  </script>
+</body>
+</html>
