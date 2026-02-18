@@ -1017,8 +1017,8 @@
 
   <script>
     // ===================== CONFIG =====================
-    // API base URL - points to the Flask backend
-    const API_BASE = window.location.origin + '/api';
+    // API base URL - points to api.php in the same folder
+    const API_BASE = 'api.php';
 
     // To use Google Calendar integration, create credentials at
     // https://console.cloud.google.com/ and fill in your values:
@@ -1050,9 +1050,9 @@
     let gisInited = false;
 
     // ===================== API HELPERS =====================
-    async function apiFetch(url, options = {}) {
+    async function apiFetch(action, options = {}) {
       options.headers = { 'Content-Type': 'application/json', ...options.headers };
-      const resp = await fetch(API_BASE + url, options);
+      const resp = await fetch(API_BASE + '?action=' + action, options);
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         throw new Error(err.error || `API error ${resp.status}`);
@@ -1064,8 +1064,8 @@
     async function loadState() {
       try {
         const [groups, tasks] = await Promise.all([
-          apiFetch('/groups'),
-          apiFetch('/tasks'),
+          apiFetch('groups'),
+          apiFetch('tasks'),
         ]);
         state.groups = groups;
         state.tasks = tasks;
@@ -1288,7 +1288,7 @@
     async function deleteGroup(id) {
       if (!confirm('Gruppe und alle zugehoerigen Aufgaben loeschen?')) return;
       try {
-        await apiFetch(`/groups/${id}`, { method: 'DELETE' });
+        await apiFetch(`group&id=${id}`, { method: 'DELETE' });
         state.groups = state.groups.filter(g => g.id !== id);
         state.tasks = state.tasks.filter(t => t.groupId !== id);
         if (state.activeGroupId === id) state.activeGroupId = null;
@@ -1306,7 +1306,7 @@
 
       try {
         if (editingGroupId) {
-          await apiFetch(`/groups/${editingGroupId}`, {
+          await apiFetch(`group&id=${editingGroupId}`, {
             method: 'PUT',
             body: JSON.stringify({ name, color: selectedGroupColor }),
           });
@@ -1317,7 +1317,7 @@
           }
         } else {
           const newId = generateId();
-          await apiFetch('/groups', {
+          await apiFetch('groups', {
             method: 'POST',
             body: JSON.stringify({ id: newId, name, color: selectedGroupColor }),
           });
@@ -1412,7 +1412,7 @@
       try {
         if (state.editingTaskId) {
           const task = state.tasks.find(t => t.id === state.editingTaskId);
-          await apiFetch(`/tasks/${state.editingTaskId}`, {
+          await apiFetch(`task&id=${state.editingTaskId}`, {
             method: 'PUT',
             body: JSON.stringify(taskData),
           });
@@ -1429,7 +1429,7 @@
             subtasks: [],
             createdAt: new Date().toISOString(),
           };
-          await apiFetch('/tasks', {
+          await apiFetch('tasks', {
             method: 'POST',
             body: JSON.stringify(newTask),
           });
@@ -1452,7 +1452,7 @@
 
     async function deleteTask(id) {
       try {
-        await apiFetch(`/tasks/${id}`, { method: 'DELETE' });
+        await apiFetch(`task&id=${id}`, { method: 'DELETE' });
         state.tasks = state.tasks.filter(t => t.id !== id);
         render();
         showToast('Aufgabe geloescht');
@@ -1474,7 +1474,7 @@
       if (task) {
         task.completed = !task.completed;
         try {
-          await apiFetch(`/tasks/${id}`, {
+          await apiFetch(`task&id=${id}`, {
             method: 'PUT',
             body: JSON.stringify({ completed: task.completed }),
           });
@@ -1509,7 +1509,7 @@
       input.value = '';
       task._subtasksExpanded = true;
       try {
-        await apiFetch(`/tasks/${taskId}`, {
+        await apiFetch(`task&id=${taskId}`, {
           method: 'PUT',
           body: JSON.stringify({ subtasks: task.subtasks }),
         });
@@ -1529,7 +1529,7 @@
         task.subtasks[index].completed = !task.subtasks[index].completed;
         task._subtasksExpanded = true;
         try {
-          await apiFetch(`/tasks/${taskId}`, {
+          await apiFetch(`task&id=${taskId}`, {
             method: 'PUT',
             body: JSON.stringify({ subtasks: task.subtasks }),
           });
@@ -1548,7 +1548,7 @@
         task.subtasks.splice(index, 1);
         task._subtasksExpanded = true;
         try {
-          await apiFetch(`/tasks/${taskId}`, {
+          await apiFetch(`task&id=${taskId}`, {
             method: 'PUT',
             body: JSON.stringify({ subtasks: task.subtasks }),
           });
@@ -1624,7 +1624,7 @@
           reorderData.movedTaskId = movedTask.id;
           reorderData.newGroupId = newGroupId;
         }
-        await apiFetch('/tasks/reorder', { method: 'POST', body: JSON.stringify(reorderData) });
+        await apiFetch('reorder', { method: 'POST', body: JSON.stringify(reorderData) });
       } catch(e) {
         console.error('Reorder error:', e);
       }
@@ -1653,7 +1653,7 @@
       if (task && groupId) {
         task.groupId = groupId;
         try {
-          await apiFetch(`/tasks/${task.id}`, {
+          await apiFetch(`task&id=${task.id}`, {
             method: 'PUT',
             body: JSON.stringify({ groupId }),
           });
