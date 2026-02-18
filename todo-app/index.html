@@ -1017,6 +1017,9 @@
 
   <script>
     // ===================== CONFIG =====================
+    // API base URL - points to the Flask backend
+    const API_BASE = window.location.origin + '/api';
+
     // To use Google Calendar integration, create credentials at
     // https://console.cloud.google.com/ and fill in your values:
     const GOOGLE_CLIENT_ID = '';  // Your OAuth 2.0 Client ID
@@ -1046,33 +1049,30 @@
     let gapiInited = false;
     let gisInited = false;
 
-    // ===================== PERSISTENCE =====================
-    function loadState() {
-      try {
-        const saved = localStorage.getItem('todoAppState');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          state.groups = parsed.groups || [];
-          state.tasks = parsed.tasks || [];
-        }
-      } catch(e) {
-        console.error('Failed to load state:', e);
+    // ===================== API HELPERS =====================
+    async function apiFetch(url, options = {}) {
+      options.headers = { 'Content-Type': 'application/json', ...options.headers };
+      const resp = await fetch(API_BASE + url, options);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `API error ${resp.status}`);
       }
-
-      if (state.groups.length === 0) {
-        state.groups = [
-          { id: generateId(), name: 'Allgemein', color: '#6B8F71' },
-          { id: generateId(), name: 'Arbeit', color: '#7B8FA1' },
-          { id: generateId(), name: 'Persoenlich', color: '#A18B7B' },
-        ];
-      }
+      return resp.json();
     }
 
-    function saveState() {
-      localStorage.setItem('todoAppState', JSON.stringify({
-        groups: state.groups,
-        tasks: state.tasks,
-      }));
+    // ===================== PERSISTENCE (MySQL via API) =====================
+    async function loadState() {
+      try {
+        const [groups, tasks] = await Promise.all([
+          apiFetch('/groups'),
+          apiFetch('/tasks'),
+        ]);
+        state.groups = groups;
+        state.tasks = tasks;
+      } catch(e) {
+        console.error('Failed to load state from server:', e);
+        showToast('Fehler beim Laden der Daten vom Server');
+      }
     }
 
     function generateId() {
@@ -1084,7 +1084,6 @@
       renderGroups();
       renderTasks();
       updateSubtitle();
-      saveState();
     }
 
     function renderGroups() {
@@ -1286,36 +1285,52 @@
       openModal('groupModal');
     }
 
-    function deleteGroup(id) {
+    async function deleteGroup(id) {
       if (!confirm('Gruppe und alle zugehoerigen Aufgaben loeschen?')) return;
-      state.groups = state.groups.filter(g => g.id !== id);
-      state.tasks = state.tasks.filter(t => t.groupId !== id);
-      if (state.activeGroupId === id) state.activeGroupId = null;
-      render();
-      showToast('Gruppe geloescht');
+      try {
+        await apiFetch(`/groups/${id}`, { method: 'DELETE' });
+        state.groups = state.groups.filter(g => g.id !== id);
+        state.tasks = state.tasks.filter(t => t.groupId !== id);
+        if (state.activeGroupId === id) state.activeGroupId = null;
+        render();
+        showToast('Gruppe geloescht');
+      } catch(e) {
+        console.error('Delete group error:', e);
+        showToast('Fehler beim Loeschen der Gruppe');
+      }
     }
 
-    function saveGroup() {
+    async function saveGroup() {
       const name = document.getElementById('groupNameInput').value.trim();
       if (!name) return;
 
-      if (editingGroupId) {
-        const group = state.groups.find(g => g.id === editingGroupId);
-        if (group) {
-          group.name = name;
-          group.color = selectedGroupColor;
+      try {
+        if (editingGroupId) {
+          await apiFetch(`/groups/${editingGroupId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, color: selectedGroupColor }),
+          });
+          const group = state.groups.find(g => g.id === editingGroupId);
+          if (group) {
+            group.name = name;
+            group.color = selectedGroupColor;
+          }
+        } else {
+          const newId = generateId();
+          await apiFetch('/groups', {
+            method: 'POST',
+            body: JSON.stringify({ id: newId, name, color: selectedGroupColor }),
+          });
+          state.groups.push({ id: newId, name, color: selectedGroupColor });
         }
-      } else {
-        state.groups.push({
-          id: generateId(),
-          name: name,
-          color: selectedGroupColor,
-        });
-      }
 
-      closeGroupModal();
-      render();
-      showToast(editingGroupId ? 'Gruppe aktualisiert' : 'Gruppe erstellt');
+        closeGroupModal();
+        render();
+        showToast(editingGroupId ? 'Gruppe aktualisiert' : 'Gruppe erstellt');
+      } catch(e) {
+        console.error('Save group error:', e);
+        showToast('Fehler beim Speichern der Gruppe');
+      }
     }
 
     function renderColorPicker() {
@@ -1379,7 +1394,7 @@
       state.editingTaskId = null;
     }
 
-    function saveTask() {
+    async function saveTask() {
       const title = document.getElementById('taskTitleInput').value.trim();
       if (!title) {
         showToast('Bitte einen Titel eingeben');
@@ -1394,51 +1409,79 @@
         reminder: document.getElementById('taskReminderInput').value,
       };
 
-      if (state.editingTaskId) {
-        const task = state.tasks.find(t => t.id === state.editingTaskId);
-        if (task) {
-          Object.assign(task, taskData);
-          if (task.reminder) scheduleReminder(task);
+      try {
+        if (state.editingTaskId) {
+          const task = state.tasks.find(t => t.id === state.editingTaskId);
+          await apiFetch(`/tasks/${state.editingTaskId}`, {
+            method: 'PUT',
+            body: JSON.stringify(taskData),
+          });
+          if (task) {
+            Object.assign(task, taskData);
+            if (task.reminder) scheduleReminder(task);
+          }
+          showToast('Aufgabe aktualisiert');
+        } else {
+          const newTask = {
+            id: generateId(),
+            ...taskData,
+            completed: false,
+            subtasks: [],
+            createdAt: new Date().toISOString(),
+          };
+          await apiFetch('/tasks', {
+            method: 'POST',
+            body: JSON.stringify(newTask),
+          });
+          state.tasks.unshift(newTask);
+          if (newTask.reminder) scheduleReminder(newTask);
+          showToast('Aufgabe erstellt');
         }
-        showToast('Aufgabe aktualisiert');
-      } else {
-        const newTask = {
-          id: generateId(),
-          ...taskData,
-          completed: false,
-          subtasks: [],
-          createdAt: new Date().toISOString(),
-        };
-        state.tasks.unshift(newTask);
-        if (newTask.reminder) scheduleReminder(newTask);
-        showToast('Aufgabe erstellt');
-      }
 
-      closeTaskModal();
-      render();
+        closeTaskModal();
+        render();
+      } catch(e) {
+        console.error('Save task error:', e);
+        showToast('Fehler beim Speichern der Aufgabe');
+      }
     }
 
     function editTask(id) {
       openTaskModal(id);
     }
 
-    function deleteTask(id) {
-      state.tasks = state.tasks.filter(t => t.id !== id);
-      render();
-      showToast('Aufgabe geloescht');
+    async function deleteTask(id) {
+      try {
+        await apiFetch(`/tasks/${id}`, { method: 'DELETE' });
+        state.tasks = state.tasks.filter(t => t.id !== id);
+        render();
+        showToast('Aufgabe geloescht');
+      } catch(e) {
+        console.error('Delete task error:', e);
+        showToast('Fehler beim Loeschen der Aufgabe');
+      }
     }
 
-    function deleteCurrentTask() {
+    async function deleteCurrentTask() {
       if (state.editingTaskId) {
-        deleteTask(state.editingTaskId);
+        await deleteTask(state.editingTaskId);
         closeTaskModal();
       }
     }
 
-    function toggleTask(id) {
+    async function toggleTask(id) {
       const task = state.tasks.find(t => t.id === id);
       if (task) {
         task.completed = !task.completed;
+        try {
+          await apiFetch(`/tasks/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ completed: task.completed }),
+          });
+        } catch(e) {
+          console.error('Toggle task error:', e);
+          task.completed = !task.completed; // revert
+        }
         render();
       }
     }
@@ -1454,7 +1497,7 @@
       }
     }
 
-    function addSubtask(taskId, input) {
+    async function addSubtask(taskId, input) {
       const title = input.value.trim();
       if (!title) return;
 
@@ -1465,30 +1508,53 @@
       task.subtasks.push({ title, completed: false });
       input.value = '';
       task._subtasksExpanded = true;
+      try {
+        await apiFetch(`/tasks/${taskId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ subtasks: task.subtasks }),
+        });
+      } catch(e) {
+        console.error('Add subtask error:', e);
+      }
       render();
-      // Re-expand and focus
       const section = document.getElementById(`subtasks-${taskId}`);
       if (section) section.style.display = 'block';
       const newInput = section.querySelector('.add-subtask-input');
       if (newInput) newInput.focus();
     }
 
-    function toggleSubtask(taskId, index) {
+    async function toggleSubtask(taskId, index) {
       const task = state.tasks.find(t => t.id === taskId);
       if (task && task.subtasks[index] !== undefined) {
         task.subtasks[index].completed = !task.subtasks[index].completed;
         task._subtasksExpanded = true;
+        try {
+          await apiFetch(`/tasks/${taskId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ subtasks: task.subtasks }),
+          });
+        } catch(e) {
+          console.error('Toggle subtask error:', e);
+        }
         render();
         const section = document.getElementById(`subtasks-${taskId}`);
         if (section) section.style.display = 'block';
       }
     }
 
-    function deleteSubtask(taskId, index) {
+    async function deleteSubtask(taskId, index) {
       const task = state.tasks.find(t => t.id === taskId);
       if (task && task.subtasks) {
         task.subtasks.splice(index, 1);
         task._subtasksExpanded = true;
+        try {
+          await apiFetch(`/tasks/${taskId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ subtasks: task.subtasks }),
+          });
+        } catch(e) {
+          console.error('Delete subtask error:', e);
+        }
         render();
         const section = document.getElementById(`subtasks-${taskId}`);
         if (section) section.style.display = 'block';
@@ -1528,7 +1594,7 @@
       if (card) card.classList.remove('drag-over-task');
     }
 
-    function taskDrop(event, targetTaskId) {
+    async function taskDrop(event, targetTaskId) {
       event.preventDefault();
       const card = event.target.closest('.task-card');
       if (card) card.classList.remove('drag-over-task');
@@ -1540,17 +1606,28 @@
 
       if (fromIndex === -1 || toIndex === -1) return;
 
-      // Move the dragged task to the target position
       const [movedTask] = state.tasks.splice(fromIndex, 1);
 
-      // If target task is in a different group, move to that group
       const targetTask = state.tasks[toIndex > fromIndex ? toIndex - 1 : toIndex];
+      let newGroupId = null;
       if (targetTask && movedTask.groupId !== targetTask.groupId) {
         movedTask.groupId = targetTask.groupId;
+        newGroupId = targetTask.groupId;
       }
 
       state.tasks.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, movedTask);
       render();
+
+      try {
+        const reorderData = { taskIds: state.tasks.map(t => t.id) };
+        if (newGroupId) {
+          reorderData.movedTaskId = movedTask.id;
+          reorderData.newGroupId = newGroupId;
+        }
+        await apiFetch('/tasks/reorder', { method: 'POST', body: JSON.stringify(reorderData) });
+      } catch(e) {
+        console.error('Reorder error:', e);
+      }
     }
 
     function groupDragOver(event, groupId) {
@@ -1565,7 +1642,7 @@
       if (item) item.classList.remove('drag-over');
     }
 
-    function groupDrop(event, groupId) {
+    async function groupDrop(event, groupId) {
       event.preventDefault();
       const item = event.target.closest('.group-item');
       if (item) item.classList.remove('drag-over');
@@ -1575,6 +1652,14 @@
       const task = state.tasks.find(t => t.id === draggedTaskId);
       if (task && groupId) {
         task.groupId = groupId;
+        try {
+          await apiFetch(`/tasks/${task.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ groupId }),
+          });
+        } catch(e) {
+          console.error('Move task error:', e);
+        }
         showToast('Aufgabe verschoben');
         render();
       }
@@ -1864,8 +1949,8 @@
     });
 
     // ===================== INIT =====================
-    function init() {
-      loadState();
+    async function init() {
+      await loadState();
       toggleFilter('all');
       render();
       initReminders();
