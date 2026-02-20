@@ -20,8 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // ===================== PASSWORD CONFIG =====================
-// HIER DEIN PASSWORT EINTRAGEN:
-$APP_PASSWORD = 'mein_passwort';   // Aendere dies zu deinem gewuenschten Passwort!
+// HIER DEINEN MD5-HASH EINTRAGEN:
+// Tipp: MD5-Hash erzeugen auf https://www.md5hashgenerator.com/
+// Der Hash unten entspricht dem Passwort 'mein_passwort'
+$APP_PASSWORD_MD5 = 'a8e3beb28e865800f498e5519dcf8e45';
 
 // ===================== AUTH CHECK =====================
 $method = $_SERVER['REQUEST_METHOD'];
@@ -31,7 +33,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 // Login und Auth-Check brauchen keine Session-Pruefung
 if ($path === 'login') {
     if ($method === 'POST') {
-        if (!empty($input['password']) && $input['password'] === $APP_PASSWORD) {
+        if (!empty($input['password']) && md5($input['password']) === $APP_PASSWORD_MD5) {
             $_SESSION['authenticated'] = true;
             echo json_encode(['success' => true]);
         } else {
