@@ -869,6 +869,96 @@
       background: var(--text-tertiary);
     }
 
+    /* ===================== LOGIN SCREEN ===================== */
+    .login-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+    }
+
+    .login-screen.hidden {
+      display: none;
+    }
+
+    .login-card {
+      background: var(--bg-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 40px;
+      width: 360px;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    .login-card h1 {
+      font-family: var(--font-serif);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .login-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .login-card .form-input {
+      margin-bottom: 16px;
+      text-align: center;
+      font-size: 15px;
+      padding: 12px 16px;
+    }
+
+    .login-card .btn-primary {
+      width: 100%;
+      padding: 12px;
+      font-size: 14px;
+    }
+
+    .login-error {
+      color: var(--danger);
+      font-size: 13px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .login-error.visible {
+      display: block;
+    }
+
+    /* Logout Button */
+    .logout-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      margin: 8px 16px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: none;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: var(--font-gothic);
+      transition: all 0.15s;
+      width: calc(100% - 32px);
+    }
+
+    .logout-btn:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: #fdf2f1;
+    }
+
     /* ===================== INLINE EDIT ===================== */
     .inline-edit-input {
       border: none;
@@ -999,7 +1089,18 @@
   </style>
 </head>
 <body>
-  <div class="app">
+  <!-- Login Screen -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <h1>Aufgaben</h1>
+      <p>Bitte Passwort eingeben</p>
+      <div class="login-error" id="loginError">Falsches Passwort</div>
+      <input type="password" class="form-input" id="loginPasswordInput" placeholder="Passwort..." autocomplete="current-password">
+      <button class="btn btn-primary" id="loginBtn" onclick="handleLogin()">Anmelden</button>
+    </div>
+  </div>
+
+  <div class="app" id="appContainer" style="display:none">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -1023,6 +1124,10 @@
           <span id="gcalBtnText">Google Kalender verbinden</span>
         </button>
       </div>
+
+      <button class="logout-btn" onclick="handleLogout()">
+        &#x2192; Abmelden
+      </button>
     </aside>
 
     <!-- Sidebar overlay for mobile -->
@@ -2086,8 +2191,61 @@
       }
     });
 
+    // ===================== AUTH =====================
+    async function checkAuth() {
+      try {
+        const resp = await fetch(API_BASE + '?action=check-auth');
+        const data = await resp.json();
+        return data.authenticated === true;
+      } catch(e) {
+        return false;
+      }
+    }
+
+    async function handleLogin() {
+      const pw = document.getElementById('loginPasswordInput').value;
+      const errEl = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
+
+      btn.textContent = 'Wird geprueft...';
+      btn.disabled = true;
+
+      try {
+        const resp = await fetch(API_BASE + '?action=login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw }),
+        });
+
+        if (resp.ok) {
+          errEl.classList.remove('visible');
+          document.getElementById('loginScreen').classList.add('hidden');
+          document.getElementById('appContainer').style.display = '';
+          await initApp();
+        } else {
+          errEl.classList.add('visible');
+        }
+      } catch(e) {
+        errEl.textContent = 'Verbindungsfehler';
+        errEl.classList.add('visible');
+      }
+
+      btn.textContent = 'Anmelden';
+      btn.disabled = false;
+    }
+
+    async function handleLogout() {
+      try {
+        await fetch(API_BASE + '?action=logout');
+      } catch(e) {}
+      document.getElementById('appContainer').style.display = 'none';
+      document.getElementById('loginScreen').classList.remove('hidden');
+      document.getElementById('loginPasswordInput').value = '';
+      document.getElementById('loginError').classList.remove('visible');
+    }
+
     // ===================== INIT =====================
-    async function init() {
+    async function initApp() {
       await loadState();
       toggleFilter('all');
       render();
@@ -2101,7 +2259,20 @@
     }
 
     // Wait for DOM
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Enter-Taste auf Passwortfeld
+      document.getElementById('loginPasswordInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLogin();
+      });
+
+      // Session pruefen
+      const isAuth = await checkAuth();
+      if (isAuth) {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('appContainer').style.display = '';
+        await initApp();
+      }
+    });
 
     // Google API callbacks
     window.addEventListener('load', () => {

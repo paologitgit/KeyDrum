@@ -6,6 +6,8 @@
  * Upload this file to your webserver in the same folder as index.html.
  */
 
+session_start();
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -14,6 +16,47 @@ header('Access-Control-Allow-Headers: Content-Type');
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
+    exit;
+}
+
+// ===================== PASSWORD CONFIG =====================
+// HIER DEIN PASSWORT EINTRAGEN:
+$APP_PASSWORD = 'mein_passwort';   // Aendere dies zu deinem gewuenschten Passwort!
+
+// ===================== AUTH CHECK =====================
+$method = $_SERVER['REQUEST_METHOD'];
+$path = isset($_GET['action']) ? $_GET['action'] : '';
+$input = json_decode(file_get_contents('php://input'), true);
+
+// Login und Auth-Check brauchen keine Session-Pruefung
+if ($path === 'login') {
+    if ($method === 'POST') {
+        if (!empty($input['password']) && $input['password'] === $APP_PASSWORD) {
+            $_SESSION['authenticated'] = true;
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(401);
+            echo json_encode(['error' => 'Falsches Passwort']);
+        }
+    }
+    exit;
+}
+
+if ($path === 'check-auth') {
+    echo json_encode(['authenticated' => !empty($_SESSION['authenticated'])]);
+    exit;
+}
+
+if ($path === 'logout') {
+    session_destroy();
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+// Alle anderen Endpunkte: Session pruefen
+if (empty($_SESSION['authenticated'])) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Nicht angemeldet']);
     exit;
 }
 
@@ -43,10 +86,6 @@ try {
 }
 
 // ===================== ROUTING =====================
-$method = $_SERVER['REQUEST_METHOD'];
-$path = isset($_GET['action']) ? $_GET['action'] : '';
-$input = json_decode(file_get_contents('php://input'), true);
-
 // Routes:
 // GET    ?action=groups          -> list groups
 // POST   ?action=groups          -> create group
