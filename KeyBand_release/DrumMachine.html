@@ -169,6 +169,107 @@
             max-width: 400px;
             line-height: 1.5;
         }
+
+        /* ---- EQUALIZER ---- */
+        .eq-panel {
+            display: flex;
+            gap: 28px;
+            margin-top: 18px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .eq-group {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 14px 16px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 110px;
+        }
+
+        .eq-group-title {
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 10px;
+        }
+
+        .eq-sliders {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .eq-slider-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .eq-slider-wrapper label {
+            font-size: 0.6rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .eq-slider-wrapper .eq-value {
+            font-size: 0.6rem;
+            color: #666;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .eq-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 6px;
+            height: 80px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            outline: none;
+            writing-mode: vertical-lr;
+            direction: rtl;
+        }
+
+        .eq-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: 2px solid #333;
+            transition: background 0.15s;
+        }
+
+        .eq-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: 2px solid #333;
+        }
+
+        .eq-slider:hover::-webkit-slider-thumb {
+            background: #ccc;
+        }
+
+        .eq-title {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.25em;
+            margin-top: 14px;
+            margin-bottom: 2px;
+        }
     </style>
 </head>
 <body>
@@ -210,6 +311,70 @@
 
             <div class="hint">Leertaste = Start / Stop &nbsp;&bull;&nbsp; Pfeiltasten = BPM</div>
         </div>
+
+        <div class="eq-title">Equalizer</div>
+        <div class="eq-panel">
+            <div class="eq-group">
+                <div class="eq-group-title" style="color:#e74c3c;">Bass</div>
+                <div class="eq-sliders">
+                    <div class="eq-slider-wrapper">
+                        <label>Lo</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="bass" data-band="low">
+                        <span class="eq-value">0</span>
+                    </div>
+                    <div class="eq-slider-wrapper">
+                        <label>Mid</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="bass" data-band="mid">
+                        <span class="eq-value">0</span>
+                    </div>
+                    <div class="eq-slider-wrapper">
+                        <label>Hi</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="bass" data-band="high">
+                        <span class="eq-value">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="eq-group">
+                <div class="eq-group-title" style="color:#f39c12;">Snare</div>
+                <div class="eq-sliders">
+                    <div class="eq-slider-wrapper">
+                        <label>Lo</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="snare" data-band="low">
+                        <span class="eq-value">0</span>
+                    </div>
+                    <div class="eq-slider-wrapper">
+                        <label>Mid</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="snare" data-band="mid">
+                        <span class="eq-value">0</span>
+                    </div>
+                    <div class="eq-slider-wrapper">
+                        <label>Hi</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="snare" data-band="high">
+                        <span class="eq-value">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="eq-group">
+                <div class="eq-group-title" style="color:#3498db;">Hi-Hat</div>
+                <div class="eq-sliders">
+                    <div class="eq-slider-wrapper">
+                        <label>Lo</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="hat" data-band="low">
+                        <span class="eq-value">0</span>
+                    </div>
+                    <div class="eq-slider-wrapper">
+                        <label>Mid</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="hat" data-band="mid">
+                        <span class="eq-value">0</span>
+                    </div>
+                    <div class="eq-slider-wrapper">
+                        <label>Hi</label>
+                        <input type="range" class="eq-slider" min="-12" max="12" value="0" data-drum="hat" data-band="high">
+                        <span class="eq-value">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -221,6 +386,39 @@
         let bassBuffer = null;
         let snareBuffer = null;
         let hatBuffer  = null;
+
+        // =========================================================
+        //  EQUALIZER  –  3-band per drum (lowshelf / peaking / highshelf)
+        // =========================================================
+        function createEqChain() {
+            const low = audioCtx.createBiquadFilter();
+            low.type = 'lowshelf';
+            low.frequency.value = 200;
+            low.gain.value = 0;
+
+            const mid = audioCtx.createBiquadFilter();
+            mid.type = 'peaking';
+            mid.frequency.value = 1000;
+            mid.Q.value = 1;
+            mid.gain.value = 0;
+
+            const high = audioCtx.createBiquadFilter();
+            high.type = 'highshelf';
+            high.frequency.value = 4000;
+            high.gain.value = 0;
+
+            low.connect(mid);
+            mid.connect(high);
+            high.connect(audioCtx.destination);
+
+            return { low, mid, high, input: low };
+        }
+
+        const eq = {
+            bass:  createEqChain(),
+            snare: createEqChain(),
+            hat:   createEqChain(),
+        };
 
         async function loadSample(url) {
             const resp = await fetch(url);
@@ -250,13 +448,13 @@
             }
         }
 
-        function playSample(buffer, time, volume) {
+        function playSample(buffer, time, volume, drumName) {
             const source = audioCtx.createBufferSource();
             const gain   = audioCtx.createGain();
             gain.gain.value = volume;
             source.buffer = buffer;
             source.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(eq[drumName].input);
             source.start(time);
         }
 
@@ -298,9 +496,9 @@
 
         function scheduleNote(step, time) {
             const [bass, snare, hat] = pattern[step];
-            if (bass)  playSample(bassBuffer,  time, 0.7);
-            if (snare) playSample(snareBuffer, time, 0.6);
-            if (hat)   playSample(hatBuffer,   time, 0.35);
+            if (bass)  playSample(bassBuffer,  time, 0.7,  'bass');
+            if (snare) playSample(snareBuffer, time, 0.6,  'snare');
+            if (hat)   playSample(hatBuffer,   time, 0.35, 'hat');
 
             scheduleQueue.push({ step, time });
             // Keep the queue small
@@ -509,6 +707,23 @@
                 e.preventDefault();
                 setBpm(bpm - 10);
             }
+        });
+
+        // =========================================================
+        //  EQUALIZER CONTROLS
+        // =========================================================
+        document.querySelectorAll('.eq-slider').forEach(slider => {
+            slider.addEventListener('input', () => {
+                const drum = slider.dataset.drum;
+                const band = slider.dataset.band;
+                const val  = parseFloat(slider.value);
+                eq[drum][band].gain.value = val;
+                slider.nextElementSibling.textContent = (val > 0 ? '+' : '') + val;
+            });
+            slider.addEventListener('dblclick', () => {
+                slider.value = 0;
+                slider.dispatchEvent(new Event('input'));
+            });
         });
 
         // =========================================================
