@@ -271,6 +271,76 @@
             margin-top: 14px;
             margin-bottom: 2px;
         }
+
+        /* ---- GROOVE CONTROLS ---- */
+        .groove-panel {
+            display: flex;
+            gap: 28px;
+            margin-top: 4px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .groove-group {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 14px 20px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 140px;
+        }
+
+        .groove-group-title {
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 8px;
+            color: #aaa;
+        }
+
+        .groove-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 120px;
+            height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .groove-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: 2px solid #333;
+            transition: background 0.15s;
+        }
+
+        .groove-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: 2px solid #333;
+        }
+
+        .groove-slider:hover::-webkit-slider-thumb {
+            background: #ccc;
+        }
+
+        .groove-value {
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -311,6 +381,20 @@
             </div>
 
             <div class="hint">Leertaste = Start / Stop &nbsp;&bull;&nbsp; Pfeiltasten = BPM</div>
+        </div>
+
+        <div class="eq-title">Groove</div>
+        <div class="groove-panel">
+            <div class="groove-group">
+                <div class="groove-group-title">Swing</div>
+                <input type="range" class="groove-slider" id="swingSlider" min="0" max="100" value="0">
+                <div class="groove-value" id="swingValue">0 %</div>
+            </div>
+            <div class="groove-group">
+                <div class="groove-group-title">One Drop</div>
+                <input type="range" class="groove-slider" id="oneDropSlider" min="0" max="100" value="0">
+                <div class="groove-value" id="oneDropValue">0 %</div>
+            </div>
         </div>
 
         <div class="eq-title">Equalizer</div>
@@ -485,6 +569,8 @@
         let nextNoteTime = 0;
         let timerID     = null;
         let displayStep = -1;
+        let swing       = 0;   // 0-1  (0 = straight, 1 = full triplet swing)
+        let oneDrop     = 0;   // 0-1  (0 = normal, 1 = full one-drop)
 
         // Queue for syncing visuals to audio
         const scheduleQueue = [];
@@ -497,18 +583,37 @@
 
         function scheduleNote(step, time) {
             const [bass, snare, hat] = pattern[step];
-            if (bass)  playSample(bassBuffer,  time, 0.7,  'bass');
+
+            // One-drop: fade bass from beats 1&3 (steps 0,4) to beats 2&4 (steps 2,6)
+            if (bass || (oneDrop > 0 && (step === 2 || step === 6))) {
+                let vol = 0.7;
+                if (step === 0 || step === 4) {
+                    // Original bass positions – fade out with one-drop
+                    vol = 0.7 * (1 - oneDrop);
+                } else if (step === 2 || step === 6) {
+                    // One-drop bass positions – fade in with one-drop
+                    vol = 0.7 * oneDrop;
+                }
+                if (vol > 0.01) playSample(bassBuffer, time, vol, 'bass');
+            }
             if (snare) playSample(snareBuffer, time, 0.6,  'snare');
             if (hat)   playSample(hatBuffer,   time, 0.35, 'hat');
 
             scheduleQueue.push({ step, time });
-            // Keep the queue small
             while (scheduleQueue.length > 24) scheduleQueue.shift();
         }
 
         function advanceNote() {
             const eighthNote = 60.0 / bpm / 2;
-            nextNoteTime += eighthNote;
+            // Swing: delay off-beats (odd steps), shorten on-beats accordingly
+            // At swing=1, off-beat moves to triplet position (2/3 of pair duration)
+            if (currentStep % 2 === 0) {
+                // Even step -> next is off-beat: longer interval
+                nextNoteTime += eighthNote * (1 + swing / 3);
+            } else {
+                // Odd step -> next is on-beat: shorter interval
+                nextNoteTime += eighthNote * (1 - swing / 3);
+            }
             currentStep = (currentStep + 1) % 8;
         }
 
@@ -725,6 +830,27 @@
                 slider.value = 0;
                 slider.dispatchEvent(new Event('input'));
             });
+        });
+
+        // =========================================================
+        //  GROOVE CONTROLS
+        // =========================================================
+        document.getElementById('swingSlider').addEventListener('input', (e) => {
+            swing = parseInt(e.target.value) / 100;
+            document.getElementById('swingValue').textContent = e.target.value + ' %';
+        });
+        document.getElementById('swingSlider').addEventListener('dblclick', (e) => {
+            e.target.value = 0;
+            e.target.dispatchEvent(new Event('input'));
+        });
+
+        document.getElementById('oneDropSlider').addEventListener('input', (e) => {
+            oneDrop = parseInt(e.target.value) / 100;
+            document.getElementById('oneDropValue').textContent = e.target.value + ' %';
+        });
+        document.getElementById('oneDropSlider').addEventListener('dblclick', (e) => {
+            e.target.value = 0;
+            e.target.dispatchEvent(new Event('input'));
         });
 
         // =========================================================
