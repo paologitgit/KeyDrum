@@ -395,6 +395,11 @@
                 <input type="range" class="groove-slider" id="oneDropSlider" min="0" max="100" value="0">
                 <div class="groove-value" id="oneDropValue">0 %</div>
             </div>
+            <div class="groove-group">
+                <div class="groove-group-title">16tel HiHat</div>
+                <input type="range" class="groove-slider" id="hat16Slider" min="0" max="100" value="0">
+                <div class="groove-value" id="hat16Value">0 %</div>
+            </div>
         </div>
 
         <div class="eq-title">Equalizer</div>
@@ -571,6 +576,7 @@
         let displayStep = -1;
         let swing       = 0;   // 0-1  (0 = straight, 1 = full triplet swing)
         let oneDrop     = 0;   // 0-1  (0 = normal, 1 = full one-drop)
+        let hat16       = 0;   // 0-1  (0 = no 16ths, 1 = full volume 16th ghost hats)
 
         // Queue for syncing visuals to audio
         const scheduleQueue = [];
@@ -621,6 +627,21 @@
                     hatVol = 0.35 * (1 + od * 0.3);
                 }
                 if (hatVol > 0.01) playSample(hatBuffer, time, hatVol, 'hat');
+            }
+
+            // --- 16th HI-HAT ghost note (scheduled halfway to next step) ---
+            if (hat16 > 0) {
+                const eighthNote = 60.0 / bpm / 2;
+                // Account for swing: the interval to the next step varies
+                let interval;
+                if (step % 2 === 0) {
+                    interval = eighthNote * (1 + swing / 3);
+                } else {
+                    interval = eighthNote * (1 - swing / 3);
+                }
+                const ghostTime = time + interval / 2;
+                const ghostVol  = 0.18 * hat16;  // softer ghost note
+                playSample(hatBuffer, ghostTime, ghostVol, 'hat');
             }
 
             scheduleQueue.push({ step, time });
@@ -873,6 +894,15 @@
             document.getElementById('oneDropValue').textContent = e.target.value + ' %';
         });
         document.getElementById('oneDropSlider').addEventListener('dblclick', (e) => {
+            e.target.value = 0;
+            e.target.dispatchEvent(new Event('input'));
+        });
+
+        document.getElementById('hat16Slider').addEventListener('input', (e) => {
+            hat16 = parseInt(e.target.value) / 100;
+            document.getElementById('hat16Value').textContent = e.target.value + ' %';
+        });
+        document.getElementById('hat16Slider').addEventListener('dblclick', (e) => {
             e.target.value = 0;
             e.target.dispatchEvent(new Event('input'));
         });
