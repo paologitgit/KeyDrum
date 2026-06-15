@@ -6,14 +6,15 @@ class AudioEngine: ObservableObject {
     private let engine = AVAudioEngine()
     private let mainMixer = AVAudioMixerNode()
     private let masterMixer = AVAudioMixerNode()
+    private let aux1BusMixer = AVAudioMixerNode()
+    private let aux2BusMixer = AVAudioMixerNode()
 
     @Published var tracks: [LooperTrack] = []
     @Published var inputChannels: [MixerChannel] = []
     @Published var looperChannels: [MixerChannel] = []
     @Published var auxBuses: [AuxBus] = []
-    @Published var masterVolume: Float = 0.8
+    var masterVolume: Float = 0.8
 
-    private var inputGainNodes: [AVAudioMixerNode] = []
     private(set) var sampleRate: Double = 44100
     let tempoManager: TempoManager
 
@@ -23,87 +24,94 @@ class AudioEngine: ObservableObject {
     }
 
     private func setup() {
-        // Attach top-level mixers
-        engine.attach(mainMixer)
-        engine.attach(masterMixer)
-        masterMixer.outputVolume = masterVolume
-        engine.connect(mainMixer, to: masterMixer, format: nil)
-        engine.connect(masterMixer, to: engine.outputNode, format: nil)
-
-        // AUX buses
+        // Create input channels
         for i in 0..<2 {
-            let aux = AuxBus(id: i, name: "AUX \(i + 1)")
-            engine.attach(aux.sendMixer)
-            engine.attach(aux.returnMixer)
-            aux.sendMixer.outputVolume = 1.0
-            aux.returnMixer.outputVolume = aux.returnLevel
-            // sendMixer → returnMixer (no plugin yet)
-            engine.connect(aux.sendMixer, to: aux.returnMixer, format: nil)
-            engine.connect(aux.returnMixer, to: mainMixer, format: nil)
-            auxBuses.append(aux)
+            inputChannels.append(MixerChannel(id: i, name: "IN \(i + 1)"))
         }
 
+        // Create looper channels
+        for i in 0..<5 {
+            looperChannels.append(MixerChannel(id: i, name: "LP \(i + 1)"))
+        }
+
+        // Create AUX buses
+        for i in 0..<2 {
+            auxBuses.append(AuxBus(id: i, name: "AUX \(i + 1)"))
+        }
+
+        // Attach all nodes
+        engine.attach(mainMixer)
+        engine.attach(masterMixer)
+        engine.attach(aux1BusMixer)
+        engine.attach(aux2BusMixer)
+
+        for ch in inputChannels {
+            engine.attach(ch.stripMixer)
+            engine.attach(ch.aux1SendNode)
+            engine.attach(ch.aux2SendNode)
+        }
+
+        for ch in looperChannels {
+            engine.attach(ch.stripMixer)
+            engine.attach(ch.aux1SendNode)
+            engine.attach(ch.aux2SendNode)
+        }
+
+        for aux in auxBuses {
+            engine.attach(aux.sendMixer)
+            engine.attach(aux.returnMixer)
+        }
+
+        // Connect master chain: mainMixer → masterMixer → outputNode
+        engine.connect(mainMixer, to: masterMixer, format: nil)
+        engine.connect(masterMixer, to: engine.outputNode, format: nil)
+        masterMixer.outputVolume = masterVolume
+
+        // Connect AUX buses: collector → sendMixer → returnMixer → masterMixer
+        engine.connect(aux1BusMixer, to: auxBuses[0].sendMixer, format: nil)
+        engine.connect(auxBuses[0].sendMixer, to: auxBuses[0].returnMixer, format: nil)
+        engine.connect(auxBuses[0].returnMixer, to: masterMixer, format: nil)
+
+        engine.connect(aux2BusMixer, to: auxBuses[1].sendMixer, format: nil)
+        engine.connect(auxBuses[1].sendMixer, to: auxBuses[1].returnMixer, format: nil)
+        engine.connect(auxBuses[1].returnMixer, to: masterMixer, format: nil)
+
+        // Connect input channel strips
         let inputNode = engine.inputNode
         let fmt = inputNode.outputFormat(forBus: 0)
         sampleRate = fmt.sampleRate > 0 ? fmt.sampleRate : 44100
 
-        // Input channels (2)
-        for i in 0..<2 {
-            let ch = MixerChannel(id: i, name: "IN \(i + 1)")
-            let gainNode = AVAudioMixerNode()
-            engine.attach(gainNode)
-            engine.attach(ch.stripMixer)
-            engine.attach(ch.aux1SendNode)
-            engine.attach(ch.aux2SendNode)
-
-            // inputNode(bus i) → gainNode → stripMixer → mainMixer
-            engine.connect(inputNode, to: gainNode, fromBus: i < inputNode.numberOfInputs ? i : 0, toBus: 0, format: fmt)
-            engine.connect(gainNode, to: ch.stripMixer, format: nil)
+        for (i, ch) in inputChannels.enumerated() {
+            // stripMixer → mainMixer
             engine.connect(ch.stripMixer, to: mainMixer, format: nil)
-
-            // sends
-            engine.connect(ch.stripMixer, to: ch.aux1SendNode, format: nil)
-            engine.connect(ch.stripMixer, to: ch.aux2SendNode, format: nil)
-            engine.connect(ch.aux1SendNode, to: auxBuses[0].sendMixer, format: nil)
-            engine.connect(ch.aux2SendNode, to: auxBuses[1].sendMixer, format: nil)
-
-            ch.aux1SendNode.outputVolume = 0
-            ch.aux2SendNode.outputVolume = 0
-            gainNode.outputVolume = 1.0
-
-            inputGainNodes.append(gainNode)
-            inputChannels.append(ch)
+            // aux sends → aux bus collectors
+            engine.connect(ch.aux1SendNode, to: aux1BusMixer, format: nil)
+            engine.connect(ch.aux2SendNode, to: aux2BusMixer, format: nil)
+            // Input is fed via the tap below; no direct node connection for mic input
+            _ = i
         }
 
-        // Record tap only on bus 0 (mono input)
+        // Connect looper channel strips
+        for ch in looperChannels {
+            engine.connect(ch.stripMixer, to: mainMixer, format: nil)
+            engine.connect(ch.aux1SendNode, to: aux1BusMixer, format: nil)
+            engine.connect(ch.aux2SendNode, to: aux2BusMixer, format: nil)
+        }
+
+        // Create looper tracks connected to their channel strips
+        for i in 0..<5 {
+            let t = LooperTrack(id: i, engine: engine, mixer: looperChannels[i].stripMixer)
+            t.configure(sampleRate: sampleRate)
+            tracks.append(t)
+        }
+
+        // Input tap for recording
         inputNode.installTap(onBus: 0, bufferSize: 512, format: fmt) { [weak self] buffer, _ in
             guard let self, let ch = buffer.floatChannelData?[0] else { return }
             let n = Int(buffer.frameLength)
-            for track in self.tracks { track.feedInput(ch, count: n) }
-        }
-
-        // Looper tracks (5)
-        for i in 0..<5 {
-            let ch = MixerChannel(id: i, name: "LP \(i + 1)")
-            engine.attach(ch.stripMixer)
-            engine.attach(ch.aux1SendNode)
-            engine.attach(ch.aux2SendNode)
-
-            let track = LooperTrack(id: i, engine: engine, channelStrip: ch.stripMixer, mainMixer: mainMixer)
-            track.configure(sampleRate: sampleRate)
-
-            // strip → mainMixer and sends
-            engine.connect(ch.stripMixer, to: mainMixer, format: nil)
-            engine.connect(ch.stripMixer, to: ch.aux1SendNode, format: nil)
-            engine.connect(ch.stripMixer, to: ch.aux2SendNode, format: nil)
-            engine.connect(ch.aux1SendNode, to: auxBuses[0].sendMixer, format: nil)
-            engine.connect(ch.aux2SendNode, to: auxBuses[1].sendMixer, format: nil)
-
-            ch.aux1SendNode.outputVolume = 0
-            ch.aux2SendNode.outputVolume = 0
-
-            looperChannels.append(ch)
-            tracks.append(track)
+            for track in self.tracks {
+                track.feedInput(ch, count: n)
+            }
         }
     }
 
@@ -116,12 +124,28 @@ class AudioEngine: ObservableObject {
     }
 
     func setMasterVolume(_ v: Float) {
+        masterVolume = v
         masterMixer.outputVolume = v
     }
 
-    func setInputGain(_ gain: Float, channel: Int) {
-        guard channel < inputGainNodes.count else { return }
-        inputGainNodes[channel].outputVolume = gain
+    func insertAUPlugin(_ unit: AVAudioUnit, into aux: AuxBus) {
+        let fmt = aux.sendMixer.outputFormat(forBus: 0)
+        engine.disconnectNodeOutput(aux.sendMixer)
+        engine.attach(unit)
+        engine.connect(aux.sendMixer, to: unit, format: fmt)
+        engine.connect(unit, to: aux.returnMixer, format: fmt)
+        aux.auPlugin = unit
+    }
+
+    func removeAUPlugin(from aux: AuxBus) {
+        let fmt = aux.sendMixer.outputFormat(forBus: 0)
+        if let au = aux.auPlugin {
+            engine.disconnectNodeOutput(aux.sendMixer)
+            engine.disconnectNodeOutput(au)
+            engine.detach(au)
+            aux.auPlugin = nil
+        }
+        engine.connect(aux.sendMixer, to: aux.returnMixer, format: fmt)
     }
 
     func recordOrOverdub(track: LooperTrack) {
@@ -134,33 +158,6 @@ class AudioEngine: ObservableObject {
         case .playing:
             track.startOverdub()
         }
-    }
-
-    // MARK: - AU Plugin management
-
-    func insertAUPlugin(_ unit: AVAudioUnit, into aux: AuxBus) {
-        // Disconnect existing chain
-        engine.disconnectNodeOutput(aux.sendMixer)
-        if let existing = aux.auPlugin {
-            engine.disconnectNodeOutput(existing)
-            engine.detach(existing)
-        }
-        // Insert: sendMixer → AU → returnMixer
-        engine.attach(unit)
-        engine.connect(aux.sendMixer, to: unit, format: nil)
-        engine.connect(unit, to: aux.returnMixer, format: nil)
-        aux.auPlugin = unit
-    }
-
-    func removeAUPlugin(from aux: AuxBus) {
-        engine.disconnectNodeOutput(aux.sendMixer)
-        if let au = aux.auPlugin {
-            engine.disconnectNodeOutput(au)
-            engine.detach(au)
-            aux.auPlugin = nil
-        }
-        engine.connect(aux.sendMixer, to: aux.returnMixer, format: nil)
-        aux.loadedPluginName = "– kein –"
     }
 
     // MARK: - CoreAudio device enumeration
@@ -215,8 +212,7 @@ class AudioEngine: ObservableObject {
                     AudioObjectGetPropertyData(deviceID, &nameAddr, 0, nil, &nameSize, raw)
                 }
             }
-            guard ok == noErr, let devName = cfName as String?,
-                  devName.localizedCaseInsensitiveContains(name) else { continue }
+            guard ok == noErr, let devName = cfName as String?, devName.localizedCaseInsensitiveContains(name) else { continue }
 
             var id = deviceID
             var inAddr = AudioObjectPropertyAddress(

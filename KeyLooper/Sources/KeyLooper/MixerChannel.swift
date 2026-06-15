@@ -16,6 +16,7 @@ class MixerChannel: ObservableObject, Identifiable {
         didSet { stripMixer.outputVolume = isMuted ? 0 : volume }
     }
     @Published var isSoloed: Bool = false
+    @Published var pan: Float = 0.0
     @Published var aux1Send: Float = 0.0 {
         didSet { aux1SendNode.outputVolume = aux1Send }
     }
