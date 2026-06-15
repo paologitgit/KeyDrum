@@ -43,11 +43,9 @@ struct ContentView: View {
                     }
                     .padding(.vertical, 8)
                 }
-            }
 
-            Divider()
+                Divider()
 
-            if let audio {
                 MixerView(audioEngine: audio, auManager: auManager)
             }
 
