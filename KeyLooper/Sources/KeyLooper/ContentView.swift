@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var tempo = TempoManager()
     @StateObject private var midi = MIDIManager()
+    @StateObject private var auManager = AUPluginManager()
     @State private var audio: AudioEngine?
     @State private var selectedTrack = 0
     @State private var bpmText = "120"
@@ -42,6 +43,12 @@ struct ContentView: View {
                     }
                     .padding(.vertical, 8)
                 }
+            }
+
+            Divider()
+
+            if let audio {
+                MixerView(audioEngine: audio, auManager: auManager)
             }
 
             Divider()

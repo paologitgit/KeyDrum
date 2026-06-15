@@ -34,14 +34,12 @@ class LooperTrack: ObservableObject {
     private var sampleRate: Double = 44100
 
     let engine: AVAudioEngine
-    let mixer: AVAudioMixerNode
 
-    init(id: Int, engine: AVAudioEngine, mixer: AVAudioMixerNode) {
+    init(id: Int, engine: AVAudioEngine, channelStrip: AVAudioMixerNode, mainMixer: AVAudioMixerNode) {
         self.id = id
         self.engine = engine
-        self.mixer = mixer
         engine.attach(playerNode)
-        engine.connect(playerNode, to: mixer, format: nil)
+        engine.connect(playerNode, to: channelStrip, format: nil)
     }
 
     func configure(sampleRate: Double) {
