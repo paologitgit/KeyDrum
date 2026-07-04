@@ -132,6 +132,12 @@
             transition: background 0.15s;
         }
 
+        .bpm-btn.small {
+            width: 32px;
+            height: 32px;
+            font-size: 16px;
+        }
+
         .bpm-btn:hover {
             background: rgba(233, 69, 96, 0.15);
         }
@@ -258,9 +264,11 @@
 
         <div class="controls">
             <div class="bpm-control">
-                <button class="bpm-btn" id="bpmDown">−</button>
+                <button class="bpm-btn" id="bpmDown5">−5</button>
+                <button class="bpm-btn small" id="bpmDown1">−1</button>
                 <div class="bpm-display"><span>BPM</span><br>120</div>
-                <button class="bpm-btn" id="bpmUp">+</button>
+                <button class="bpm-btn small" id="bpmUp1">+1</button>
+                <button class="bpm-btn" id="bpmUp5">+5</button>
             </div>
             <input type="range" id="bpmSlider" min="30" max="240" value="120">
             <div class="btn-row">
@@ -279,8 +287,10 @@
         const bpmDisplay = document.querySelector('.bpm-display');
         const bpmSlider = document.getElementById('bpmSlider');
         const startBtn = document.getElementById('startBtn');
-        const bpmDown = document.getElementById('bpmDown');
-        const bpmUp = document.getElementById('bpmUp');
+        const bpmDown5 = document.getElementById('bpmDown5');
+        const bpmDown1 = document.getElementById('bpmDown1');
+        const bpmUp1 = document.getElementById('bpmUp1');
+        const bpmUp5 = document.getElementById('bpmUp5');
         const muteBtn = document.getElementById('muteBtn');
         const flashBtn = document.getElementById('flashBtn');
         const screenFlash = document.getElementById('screenFlash');
@@ -439,8 +449,10 @@
         });
 
         bpmSlider.addEventListener('input', () => setBpm(parseInt(bpmSlider.value)));
-        bpmDown.addEventListener('click', () => setBpm(bpm - 5));
-        bpmUp.addEventListener('click', () => setBpm(bpm + 5));
+        bpmDown5.addEventListener('click', () => setBpm(bpm - 5));
+        bpmDown1.addEventListener('click', () => setBpm(bpm - 1));
+        bpmUp1.addEventListener('click', () => setBpm(bpm + 1));
+        bpmUp5.addEventListener('click', () => setBpm(bpm + 5));
 
         muteBtn.addEventListener('click', () => {
             muted = !muted;
