@@ -193,8 +193,8 @@
             box-shadow: 0 0 8px rgba(255,255,255,0.3);
         }
 
-        /* Beat group separators */
-        .step-btn:nth-child(4n+1) {
+        /* Beat group separators – applied via JS */
+        .step-btn.beat-start {
             margin-left: 6px;
         }
 
@@ -222,7 +222,7 @@
             font-size: 0.6rem;
             color: #555;
         }
-        .beat-num:nth-child(4n+1) { margin-left: 6px; }
+        .beat-num.beat-start { margin-left: 6px; }
         .beat-num.downbeat { color: #999; font-weight: bold; }
 
         /* Step position indicator */
@@ -658,7 +658,7 @@
         beatRow.appendChild(spacer);
         for (let s = 0; s < STEPS; s++) {
             const num = document.createElement('div');
-            num.className = 'beat-num' + (s % 4 === 0 ? ' downbeat' : '');
+            num.className = 'beat-num' + (s % 4 === 0 ? ' downbeat beat-start' : '');
             num.textContent = s + 1;
             beatRow.appendChild(num);
         }
@@ -693,7 +693,7 @@
             // Step buttons
             for (let s = 0; s < STEPS; s++) {
                 const btn = document.createElement('div');
-                btn.className = 'step-btn off';
+                btn.className = 'step-btn off' + (s % 4 === 0 ? ' beat-start' : '');
                 btn.dataset.ch = ch.id;
                 btn.dataset.step = s;
                 btn.addEventListener('mousedown', () => toggleStep(ch.id, s, btn));
@@ -736,7 +736,7 @@
 
     function toggleStep(chId, step, btn) {
         grid[chId][step] = !grid[chId][step];
-        btn.className = `step-btn ${grid[chId][step] ? 'on' : 'off'}`;
+        btn.className = `step-btn ${grid[chId][step] ? 'on' : 'off'}${step % 4 === 0 ? ' beat-start' : ''}`;
     }
 
     // =====================================================================
@@ -858,8 +858,9 @@
 
     function refreshGridUI() {
         document.querySelectorAll('.step-btn').forEach(el => {
-            const on = grid[el.dataset.ch][parseInt(el.dataset.step)];
-            el.className = `step-btn ${on ? 'on' : 'off'}`;
+            const step = parseInt(el.dataset.step);
+            const on = grid[el.dataset.ch][step];
+            el.className = `step-btn ${on ? 'on' : 'off'}${step % 4 === 0 ? ' beat-start' : ''}`;
         });
     }
 
