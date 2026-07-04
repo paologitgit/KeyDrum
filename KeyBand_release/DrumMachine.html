@@ -353,12 +353,14 @@
     <div id="ui" style="display:none;">
         <div class="controls">
             <div class="bpm-control">
-                <button id="bpmDown" title="BPM verringern">&#8722;</button>
+                <button id="bpmDown5" title="-5">&#8722;</button>
+                <button id="bpmDown1" title="-1" style="font-size:0.85rem;">&#8722;1</button>
                 <div class="bpm-wrapper">
                     <div class="bpm-display" id="bpmDisplay">120</div>
                     <div class="bpm-label">BPM</div>
                 </div>
-                <button id="bpmUp" title="BPM erhoehen">+</button>
+                <button id="bpmUp1" title="+1" style="font-size:0.85rem;">+1</button>
+                <button id="bpmUp5" title="+5">+</button>
             </div>
         </div>
 
@@ -824,8 +826,10 @@
             document.getElementById('bpmDisplay').textContent = bpm;
         }
 
-        document.getElementById('bpmUp').addEventListener('click',   () => setBpm(bpm + 5));
-        document.getElementById('bpmDown').addEventListener('click', () => setBpm(bpm - 5));
+        document.getElementById('bpmUp5').addEventListener('click',   () => setBpm(bpm + 5));
+        document.getElementById('bpmDown5').addEventListener('click', () => setBpm(bpm - 5));
+        document.getElementById('bpmUp1').addEventListener('click',   () => setBpm(bpm + 1));
+        document.getElementById('bpmDown1').addEventListener('click', () => setBpm(bpm - 1));
         document.getElementById('startStop').addEventListener('click', togglePlayback);
 
         // Hold-to-repeat for BPM buttons
@@ -836,8 +840,10 @@
         function stopHold() {
             clearInterval(holdTimer);
         }
-        document.getElementById('bpmUp').addEventListener('mousedown',  () => startHold(5));
-        document.getElementById('bpmDown').addEventListener('mousedown', () => startHold(-5));
+        document.getElementById('bpmUp5').addEventListener('mousedown',   () => startHold(5));
+        document.getElementById('bpmDown5').addEventListener('mousedown', () => startHold(-5));
+        document.getElementById('bpmUp1').addEventListener('mousedown',   () => startHold(1));
+        document.getElementById('bpmDown1').addEventListener('mousedown', () => startHold(-1));
         document.addEventListener('mouseup', stopHold);
 
         // Keyboard
