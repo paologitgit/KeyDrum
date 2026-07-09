@@ -89,6 +89,10 @@
         .btn-play:hover { background: #4CAF50; color: #fff; }
         .btn-play.playing { border-color: #e74c3c; color: #e74c3c; }
         .btn-play.playing:hover { background: #e74c3c; color: #fff; }
+        .btn-ending { border-color: #ff9800; color: #ff9800; }
+        .btn-ending:hover { background: #ff9800; color: #fff; }
+        .btn-ending.active { background: #ff9800; color: #fff; animation: pulse-ending 0.5s infinite alternate; }
+        @keyframes pulse-ending { from { opacity: 1; } to { opacity: 0.6; } }
 
         .btn-sm {
             width: 32px; height: 32px;
@@ -281,6 +285,75 @@
             color: #444;
         }
 
+        /* ---- MIDI PANEL ---- */
+        .midi-panel {
+            background: #222;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 300px;
+        }
+        .midi-title {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.25em;
+        }
+        .midi-status {
+            font-size: 0.65rem;
+            color: #555;
+        }
+        .midi-status.connected { color: #4CAF50; }
+        .midi-status.error { color: #e74c3c; }
+        .midi-mappings {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .midi-map-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 6px 10px;
+        }
+        .midi-map-item .action-name {
+            font-size: 0.7rem;
+            color: #aaa;
+            min-width: 50px;
+        }
+        .midi-map-item .midi-val {
+            font-size: 0.6rem;
+            color: #666;
+            min-width: 40px;
+        }
+        .btn-learn {
+            font-size: 0.6rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .btn-learn.learning {
+            border-color: #ff9800;
+            color: #ff9800;
+            animation: pulse-ending 0.4s infinite alternate;
+        }
+
+        /* ---- BAR COUNTER ---- */
+        .bar-display {
+            font-size: 0.75rem;
+            color: #555;
+            margin-top: 4px;
+        }
+        .bar-display span { color: #aaa; font-weight: bold; }
+
         /* ---- RESPONSIVE ---- */
         @media (max-width: 900px) {
             .ch-controls { display: none; }
@@ -321,13 +394,33 @@
             <span class="knob-val" id="masterVal">80%</span>
         </div>
 
+        <button class="btn btn-ending" id="endingBtn">Ending</button>
         <button class="btn" id="clearBtn">Clear</button>
     </div>
+
+    <div class="bar-display" id="barDisplay"></div>
 
     <div class="sequencer" id="sequencer"></div>
 
     <div class="hint">
-        Leertaste = Play/Stop &nbsp;&bull;&nbsp; Pfeiltasten = BPM &nbsp;&bull;&nbsp; Doppelklick Regler = Reset
+        Leertaste = Play/Stop &nbsp;&bull;&nbsp; E = Ending &nbsp;&bull;&nbsp; Pfeiltasten = BPM
+    </div>
+
+    <div class="midi-panel" id="midiPanel">
+        <div class="midi-title">MIDI Controller</div>
+        <div class="midi-status" id="midiStatus">MIDI nicht verbunden</div>
+        <div class="midi-mappings" id="midiMappings">
+            <div class="midi-map-item">
+                <span class="action-name">Play/Stop</span>
+                <span class="midi-val" id="midiValPlay">--</span>
+                <button class="btn btn-learn" id="learnPlay">Learn</button>
+            </div>
+            <div class="midi-map-item">
+                <span class="action-name">Ending</span>
+                <span class="midi-val" id="midiValEnding">--</span>
+                <button class="btn btn-learn" id="learnEnding">Learn</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -363,6 +456,22 @@
     let currentStep = 0;
     let nextNoteTime = 0;
     let timerID = null;
+    let globalStep = 0;       // counts total steps since play started
+    let endingMode = false;
+    let endingStopAtStep = -1;
+
+    // Ending fill pattern (last bar) – builds up to a crash
+    const FILL = {
+        kick:   [1,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,1].map(Boolean),
+        snare:  [0,0,0,0, 1,0,0,0, 1,0,1,0, 1,1,1,1].map(Boolean),
+        chh:    [1,0,1,0, 1,0,1,0, 1,1,1,1, 1,1,1,1].map(Boolean),
+        ohh:    [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0].map(Boolean),
+        clap:   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1].map(Boolean),
+        ltom:   [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,0,0].map(Boolean),
+        mtom:   [0,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0].map(Boolean),
+        htom:   [0,0,0,0, 0,0,0,1, 0,0,0,1, 0,0,0,0].map(Boolean),
+        accent: [0,0,0,0, 1,0,0,0, 1,0,1,0, 1,1,1,1].map(Boolean),
+    };
 
     CHANNELS.forEach(ch => {
         grid[ch.id] = new Array(STEPS).fill(false);
@@ -583,32 +692,49 @@
     const LOOKAHEAD = 0.1;
     const INTERVAL_MS = 25;
 
+    function isInFillBar() {
+        if (!endingMode) return false;
+        return endingStopAtStep - globalStep <= STEPS;
+    }
+
     function scheduleStep(step, time) {
-        const hasAccent = grid['accent'][step];
+        const useFill = isInFillBar();
+        const src = useFill ? FILL : grid;
+        const hasAccent = (src['accent'] || [])[step];
 
         CHANNELS.forEach(ch => {
             if (ch.id === 'accent') return;
-            if (!grid[ch.id][step]) return;
+            const pattern = src[ch.id];
+            if (!pattern || !pattern[step]) return;
             synth808(ch.id, time, hasAccent);
         });
 
         // Visual update
-        requestAnimationFrame(() => highlightStep(step));
+        const bar = Math.floor(globalStep / STEPS) + 1;
+        requestAnimationFrame(() => {
+            highlightStep(step);
+            updateBarDisplay(bar, useFill);
+        });
     }
 
     function advanceStep() {
         const sixteenth = 60.0 / bpm / 4;
-        // Swing on off-16ths (odd steps)
         if (currentStep % 2 === 0) {
             nextNoteTime += sixteenth * (1 + swing / 3);
         } else {
             nextNoteTime += sixteenth * (1 - swing / 3);
         }
         currentStep = (currentStep + 1) % STEPS;
+        globalStep++;
+
+        // Check if ending is complete
+        if (endingMode && globalStep >= endingStopAtStep) {
+            requestAnimationFrame(() => stopPlayback());
+        }
     }
 
     function scheduler() {
-        while (nextNoteTime < audioCtx.currentTime + LOOKAHEAD) {
+        while (isPlaying && nextNoteTime < audioCtx.currentTime + LOOKAHEAD) {
             scheduleStep(currentStep, nextNoteTime);
             advanceStep();
         }
@@ -622,24 +748,58 @@
         audioCtx.resume();
         isPlaying = true;
         currentStep = 0;
+        globalStep = 0;
+        endingMode = false;
+        endingStopAtStep = -1;
         nextNoteTime = audioCtx.currentTime;
         scheduler();
         timerID = setInterval(scheduler, INTERVAL_MS);
         document.getElementById('playBtn').textContent = 'Stop';
         document.getElementById('playBtn').classList.add('playing');
+        document.getElementById('endingBtn').classList.remove('active');
+        updateBarDisplay(1, false);
     }
 
     function stopPlayback() {
         if (!isPlaying) return;
         isPlaying = false;
+        endingMode = false;
+        endingStopAtStep = -1;
         clearInterval(timerID);
         document.getElementById('playBtn').textContent = 'Play';
         document.getElementById('playBtn').classList.remove('playing');
+        document.getElementById('endingBtn').classList.remove('active');
+        document.getElementById('barDisplay').textContent = '';
         clearHighlight();
     }
 
     function togglePlayback() {
         isPlaying ? stopPlayback() : startPlayback();
+    }
+
+    function triggerEnding() {
+        if (!isPlaying || endingMode) return;
+        endingMode = true;
+        // Complete current bar, play remaining bars to fill 4 bars, then 1 fill bar
+        const stepsIntoBar = globalStep % STEPS;
+        const stepsToEndOfBar = stepsIntoBar === 0 ? 0 : STEPS - stepsIntoBar;
+        const currentBar = Math.floor(globalStep / STEPS) % 4;
+        const barsRemaining = (3 - currentBar);
+        endingStopAtStep = globalStep + stepsToEndOfBar + (barsRemaining * STEPS) + STEPS;
+        document.getElementById('endingBtn').classList.add('active');
+    }
+
+    function updateBarDisplay(bar, isFill) {
+        const el = document.getElementById('barDisplay');
+        if (!isPlaying) { el.textContent = ''; return; }
+        if (isFill) {
+            el.innerHTML = 'Takt: <span style="color:#ff9800;">FILL / ENDING</span>';
+        } else if (endingMode) {
+            const barsLeft = Math.ceil((endingStopAtStep - globalStep) / STEPS);
+            el.innerHTML = `Takt: <span>${bar % 4 || 4}</span> / 4 &nbsp; (Ending in ${barsLeft} Takten)`;
+        } else {
+            el.innerHTML = `Takt: <span>${((bar - 1) % 4) + 1}</span> / 4`;
+        }
     }
 
     // =====================================================================
@@ -815,14 +975,155 @@
         });
     });
 
+    // Ending button
+    document.getElementById('endingBtn').addEventListener('click', triggerEnding);
+
     // Keyboard
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Space') { e.preventDefault(); togglePlayback(); }
+        else if (e.code === 'KeyE') { e.preventDefault(); triggerEnding(); }
         else if (e.code === 'ArrowUp')    { e.preventDefault(); setBpm(bpm + 1); }
         else if (e.code === 'ArrowDown')  { e.preventDefault(); setBpm(bpm - 1); }
         else if (e.code === 'ArrowRight') { e.preventDefault(); setBpm(bpm + 10); }
         else if (e.code === 'ArrowLeft')  { e.preventDefault(); setBpm(bpm - 10); }
     });
+
+    // =====================================================================
+    //  MIDI LEARN
+    // =====================================================================
+    const MIDI_ACTIONS = {
+        play:   { fn: togglePlayback, label: 'Play/Stop' },
+        ending: { fn: triggerEnding,  label: 'Ending' },
+    };
+
+    let midiMappings = {};    // { 'note-60': 'play', 'cc-64': 'ending', ... }
+    let midiLearnTarget = null;
+
+    // Load saved mappings
+    try {
+        const saved = localStorage.getItem('808-midi-mappings');
+        if (saved) { midiMappings = JSON.parse(saved); updateMidiDisplay(); }
+    } catch (e) {}
+
+    function saveMidiMappings() {
+        try { localStorage.setItem('808-midi-mappings', JSON.stringify(midiMappings)); } catch (e) {}
+    }
+
+    function midiKeyStr(msg) {
+        const cmd = msg[0] & 0xf0;
+        if (cmd === 0x90 || cmd === 0x80) return `note-${msg[1]}`;
+        if (cmd === 0xb0) return `cc-${msg[1]}`;
+        return null;
+    }
+
+    function midiKeyLabel(key) {
+        if (!key) return '--';
+        const [type, num] = key.split('-');
+        return type === 'note' ? `Note ${num}` : `CC ${num}`;
+    }
+
+    function handleMidiMessage(e) {
+        const msg = e.data;
+        if (!msg || msg.length < 3) return;
+        const cmd = msg[0] & 0xf0;
+        const velocity = msg[2];
+
+        // Only trigger on note-on (velocity > 0) or CC value > 63
+        const isOn = (cmd === 0x90 && velocity > 0) || (cmd === 0xb0 && velocity > 63);
+        if (!isOn && cmd !== 0x90 && cmd !== 0xb0) return;
+
+        const key = midiKeyStr(msg);
+        if (!key) return;
+
+        // Learn mode
+        if (midiLearnTarget) {
+            // Remove old mapping for this action
+            Object.keys(midiMappings).forEach(k => {
+                if (midiMappings[k] === midiLearnTarget) delete midiMappings[k];
+            });
+            midiMappings[key] = midiLearnTarget;
+            saveMidiMappings();
+            updateMidiDisplay();
+            stopLearn();
+            return;
+        }
+
+        // Normal mode – trigger action
+        if (isOn && midiMappings[key]) {
+            MIDI_ACTIONS[midiMappings[key]].fn();
+        }
+    }
+
+    function startLearn(action) {
+        stopLearn();
+        midiLearnTarget = action;
+        document.getElementById(action === 'play' ? 'learnPlay' : 'learnEnding').classList.add('learning');
+        document.getElementById(action === 'play' ? 'learnPlay' : 'learnEnding').textContent = 'Warte...';
+    }
+
+    function stopLearn() {
+        midiLearnTarget = null;
+        document.querySelectorAll('.btn-learn').forEach(b => {
+            b.classList.remove('learning');
+            b.textContent = 'Learn';
+        });
+    }
+
+    function updateMidiDisplay() {
+        const playKey = Object.keys(midiMappings).find(k => midiMappings[k] === 'play');
+        const endKey  = Object.keys(midiMappings).find(k => midiMappings[k] === 'ending');
+        document.getElementById('midiValPlay').textContent = midiKeyLabel(playKey);
+        document.getElementById('midiValEnding').textContent = midiKeyLabel(endKey);
+    }
+
+    document.getElementById('learnPlay').addEventListener('click', () => startLearn('play'));
+    document.getElementById('learnEnding').addEventListener('click', () => startLearn('ending'));
+
+    // Init MIDI
+    async function initMidi() {
+        const statusEl = document.getElementById('midiStatus');
+        if (!navigator.requestMIDIAccess) {
+            statusEl.textContent = 'Web MIDI nicht unterstuetzt (Chrome/Edge noetig)';
+            statusEl.className = 'midi-status error';
+            return;
+        }
+        try {
+            const midi = await navigator.requestMIDIAccess({ sysex: false });
+            const inputs = midi.inputs;
+            let count = 0;
+            inputs.forEach(input => {
+                input.onmidimessage = handleMidiMessage;
+                count++;
+            });
+            midi.onstatechange = (e) => {
+                if (e.port.type === 'input') {
+                    if (e.port.state === 'connected') {
+                        e.port.onmidimessage = handleMidiMessage;
+                    }
+                    updateMidiStatus(midi);
+                }
+            };
+            updateMidiStatus(midi);
+        } catch (e) {
+            statusEl.textContent = 'MIDI Zugriff verweigert';
+            statusEl.className = 'midi-status error';
+        }
+    }
+
+    function updateMidiStatus(midi) {
+        const statusEl = document.getElementById('midiStatus');
+        let names = [];
+        midi.inputs.forEach(input => { if (input.state === 'connected') names.push(input.name); });
+        if (names.length > 0) {
+            statusEl.textContent = 'Verbunden: ' + names.join(', ');
+            statusEl.className = 'midi-status connected';
+        } else {
+            statusEl.textContent = 'Kein MIDI-Geraet gefunden';
+            statusEl.className = 'midi-status';
+        }
+    }
+
+    updateMidiDisplay();
 
     // =====================================================================
     //  PRESET PATTERNS
@@ -869,6 +1170,7 @@
     // =====================================================================
     buildGrid();
     loadPreset('classic');
+    initMidi();
     </script>
 </body>
 </html>
