@@ -15,6 +15,7 @@ from bpy.props import (
     PointerProperty,
     FloatProperty,
     IntProperty,
+    BoolProperty,
 )
 from bpy.types import (
     Operator,
@@ -82,7 +83,10 @@ def build_hatch_nodegroup(light_obj=None):
     _new_socket(tree, "Hatch Scale", 'INPUT', 'NodeSocketFloat', default=80.0, min_val=1.0, max_val=1000.0)
     _new_socket(tree, "Line Width", 'INPUT', 'NodeSocketFloat', default=0.10, min_val=0.01, max_val=0.9)
     _new_socket(tree, "Angle Offset", 'INPUT', 'NodeSocketFloat', default=0.0, min_val=-360.0, max_val=360.0)
+    _new_socket(tree, "Wobble", 'INPUT', 'NodeSocketFloat', default=0.15, min_val=0.0, max_val=2.0)
+    _new_socket(tree, "Blur", 'INPUT', 'NodeSocketFloat', default=0.03, min_val=0.001, max_val=0.5)
     _new_socket(tree, "Color", 'OUTPUT', 'NodeSocketColor')
+    _new_socket(tree, "Alpha", 'OUTPUT', 'NodeSocketFloat')
 
     nodes = tree.nodes
     links = tree.links
@@ -158,7 +162,7 @@ def build_hatch_nodegroup(light_obj=None):
     tex_coord.location = (-1400, 900)
 
     def make_hatch_layer(idx, angle_deg_static, scale_mul, x):
-        """One directional hatch layer: rotated wave texture -> thin line mask."""
+        """One directional hatch layer: rotated + wobble-warped wave texture -> soft line mask."""
         static_add = nodes.new('ShaderNodeMath')
         static_add.operation = 'ADD'
         static_add.inputs[1].default_value = math.radians(angle_deg_static)
@@ -177,20 +181,69 @@ def build_hatch_nodegroup(light_obj=None):
         scale_node.location = (x, 550 - idx * 250)
         links.new(n_in.outputs['Hatch Scale'], scale_node.inputs[0])
 
+        # decorrelate each layer's noise sample so layers don't wobble in lockstep
+        layer_offset = nodes.new('ShaderNodeVectorMath')
+        layer_offset.operation = 'ADD'
+        layer_offset.inputs[1].default_value = (idx * 13.7, idx * 7.3, idx * 3.1)
+        layer_offset.location = (x + 200, 900 - idx * 250)
+        links.new(rot.outputs['Vector'], layer_offset.inputs[0])
+
+        noise = nodes.new('ShaderNodeTexNoise')
+        noise.noise_dimensions = '3D'
+        noise.inputs['Detail'].default_value = 2.0
+        noise.inputs['Roughness'].default_value = 0.5
+        noise.location = (x + 400, 900 - idx * 250)
+        links.new(layer_offset.outputs['Vector'], noise.inputs['Vector'])
+        links.new(scale_node.outputs[0], noise.inputs['Scale'])
+
+        noise_centered = nodes.new('ShaderNodeVectorMath')
+        noise_centered.operation = 'SUBTRACT'
+        noise_centered.inputs[1].default_value = (0.5, 0.5, 0.5)
+        noise_centered.location = (x + 600, 900 - idx * 250)
+        links.new(noise.outputs['Color'], noise_centered.inputs[0])
+
+        wobble_scaled = nodes.new('ShaderNodeVectorMath')
+        wobble_scaled.operation = 'SCALE'
+        wobble_scaled.location = (x + 800, 900 - idx * 250)
+        links.new(noise_centered.outputs['Vector'], wobble_scaled.inputs[0])
+        links.new(n_in.outputs['Wobble'], wobble_scaled.inputs['Scale'])
+
+        warped = nodes.new('ShaderNodeVectorMath')
+        warped.operation = 'ADD'
+        warped.location = (x + 400, 700 - idx * 250)
+        links.new(rot.outputs['Vector'], warped.inputs[0])
+        links.new(wobble_scaled.outputs['Vector'], warped.inputs[1])
+
         wave = nodes.new('ShaderNodeTexWave')
         wave.wave_type = 'BANDS'
         wave.bands_direction = 'X'
         wave.inputs['Distortion'].default_value = 0.0
         wave.inputs['Detail'].default_value = 0.0
-        wave.location = (x + 200, 650 - idx * 250)
-        links.new(rot.outputs['Vector'], wave.inputs['Vector'])
+        wave.location = (x + 600, 650 - idx * 250)
+        links.new(warped.outputs['Vector'], wave.inputs['Vector'])
         links.new(scale_node.outputs[0], wave.inputs['Scale'])
 
-        line_mask = nodes.new('ShaderNodeMath')
-        line_mask.operation = 'LESS_THAN'
-        line_mask.location = (x + 420, 650 - idx * 250)
-        links.new(wave.outputs['Fac'], line_mask.inputs[0])
-        links.new(n_in.outputs['Line Width'], line_mask.inputs[1])
+        line_low = nodes.new('ShaderNodeMath')
+        line_low.operation = 'SUBTRACT'
+        line_low.location = (x + 800, 500 - idx * 250)
+        links.new(n_in.outputs['Line Width'], line_low.inputs[0])
+        links.new(n_in.outputs['Blur'], line_low.inputs[1])
+
+        line_high = nodes.new('ShaderNodeMath')
+        line_high.operation = 'ADD'
+        line_high.location = (x + 800, 380 - idx * 250)
+        links.new(n_in.outputs['Line Width'], line_high.inputs[0])
+        links.new(n_in.outputs['Blur'], line_high.inputs[1])
+
+        line_mask = nodes.new('ShaderNodeMapRange')
+        line_mask.interpolation_type = 'SMOOTHSTEP'
+        line_mask.clamp = True
+        line_mask.inputs['To Min'].default_value = 1.0
+        line_mask.inputs['To Max'].default_value = 0.0
+        line_mask.location = (x + 1000, 650 - idx * 250)
+        links.new(wave.outputs['Fac'], line_mask.inputs['Value'])
+        links.new(line_low.outputs[0], line_mask.inputs['From Min'])
+        links.new(line_high.outputs[0], line_mask.inputs['From Max'])
         return line_mask
 
     layer1 = make_hatch_layer(0, 45.0, 1.0, -900)
@@ -248,11 +301,12 @@ def build_hatch_nodegroup(light_obj=None):
     links.new(n_in.outputs['Ink Color'], mix.inputs['B'])
 
     links.new(mix.outputs['Result'], n_out.inputs['Color'])
+    links.new(ink_mask.outputs[0], n_out.inputs['Alpha'])
 
     return tree
 
 
-def build_hatch_material(light_obj=None):
+def build_hatch_material(light_obj=None, wobble=0.15, blur=0.03, transparent=False):
     mat = bpy.data.materials.get("Sketch_Hatch")
     if mat is None:
         mat = bpy.data.materials.new("Sketch_Hatch")
@@ -265,17 +319,87 @@ def build_hatch_material(light_obj=None):
     group = nt.nodes.new('ShaderNodeGroup')
     group.node_tree = tree
     group.location = (-200, 0)
+    group.inputs['Wobble'].default_value = wobble
+    group.inputs['Blur'].default_value = blur
 
     emission = nt.nodes.new('ShaderNodeEmission')
-    emission.location = (100, 0)
+    emission.location = (100, 150)
     emission.inputs['Strength'].default_value = 1.0
     nt.links.new(group.outputs['Color'], emission.inputs['Color'])
 
+    if transparent:
+        # Paper areas become fully see-through; only ink strokes stay opaque black.
+        transp = nt.nodes.new('ShaderNodeBsdfTransparent')
+        transp.location = (100, -100)
+
+        mix_shader = nt.nodes.new('ShaderNodeMixShader')
+        mix_shader.location = (350, 0)
+        nt.links.new(group.outputs['Alpha'], mix_shader.inputs['Fac'])
+        nt.links.new(transp.outputs['BSDF'], mix_shader.inputs[1])
+        nt.links.new(emission.outputs['Emission'], mix_shader.inputs[2])
+        surface_socket = mix_shader.outputs['Shader']
+
+        for attr, value in (("blend_method", 'HASHED'), ("shadow_method", 'HASHED'),
+                            ("use_transparent_shadow", True)):
+            try:
+                setattr(mat, attr, value)
+            except Exception:
+                pass
+    else:
+        surface_socket = emission.outputs['Emission']
+        try:
+            mat.blend_method = 'OPAQUE'
+        except Exception:
+            pass
+
     out = nt.nodes.new('ShaderNodeOutputMaterial')
-    out.location = (350, 0)
-    nt.links.new(emission.outputs['Emission'], out.inputs['Surface'])
+    out.location = (600, 0)
+    nt.links.new(surface_socket, out.inputs['Surface'])
 
     return mat
+
+
+def overlay_hatch_on_material(mat, light_obj=None, wobble=0.15, blur=0.03):
+    """Splice the hatch pattern on top of an existing material's shader output.
+
+    Keeps whatever the material already does (Principled BSDF, textures, ...)
+    and draws ink strokes over it via Mix Shader, so no alpha/blend-mode
+    setup is needed and there is no z-fighting risk (same faces, same
+    material slot).
+    """
+    if not mat.use_nodes:
+        mat.use_nodes = True
+    nt = mat.node_tree
+
+    out = next((n for n in nt.nodes if n.bl_idname == 'ShaderNodeOutputMaterial' and n.is_active_output), None)
+    if out is None:
+        out = nt.nodes.new('ShaderNodeOutputMaterial')
+        out.location = (600, 0)
+
+    surface_input = out.inputs['Surface']
+    original_link = surface_input.links[0] if surface_input.links else None
+    original_socket = original_link.from_socket if original_link else None
+
+    tree = build_hatch_nodegroup(light_obj)
+
+    group = nt.nodes.new('ShaderNodeGroup')
+    group.node_tree = tree
+    group.location = (out.location.x - 500, out.location.y + 400)
+    group.inputs['Wobble'].default_value = wobble
+    group.inputs['Blur'].default_value = blur
+
+    emission = nt.nodes.new('ShaderNodeEmission')
+    emission.location = (out.location.x - 250, out.location.y + 400)
+    nt.links.new(group.outputs['Color'], emission.inputs['Color'])
+
+    mix_shader = nt.nodes.new('ShaderNodeMixShader')
+    mix_shader.location = (out.location.x - 100, out.location.y + 150)
+    nt.links.new(group.outputs['Alpha'], mix_shader.inputs['Fac'])
+    if original_socket is not None:
+        nt.links.new(original_socket, mix_shader.inputs[1])
+    nt.links.new(emission.outputs['Emission'], mix_shader.inputs[2])
+
+    nt.links.new(mix_shader.outputs['Shader'], surface_input)
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +500,20 @@ class SketchNPRSettings(PropertyGroup):
     line_thickness: IntProperty(
         name="Linienstaerke", default=2, min=1, max=50,
     )
+    wobble: FloatProperty(
+        name="Wobble (zittrig)", description="Handgezeichnete Unregelmaessigkeit der Striche",
+        default=0.15, min=0.0, max=2.0,
+    )
+    blur: FloatProperty(
+        name="Blur (unscharf)", description="Weichheit der Strichkanten",
+        default=0.03, min=0.001, max=0.5,
+    )
+    transparent: BoolProperty(
+        name="Transparent (Paper = durchsichtig)",
+        description="Nur Tinte bleibt sichtbar, Papierflaeche wird transparent "
+                     "(z.B. fuer ein separates Overlay-Objekt)",
+        default=False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +555,10 @@ class SKETCHNPR_OT_build_hatch_material(Operator):
     def execute(self, context):
         settings = context.scene.sketch_npr
         try:
-            mat = build_hatch_material(settings.light)
+            mat = build_hatch_material(
+                settings.light, wobble=settings.wobble, blur=settings.blur,
+                transparent=settings.transparent,
+            )
         except Exception as e:
             self.report({'ERROR'}, f"Hatch-Shader konnte nicht gebaut werden: {e}")
             return {'CANCELLED'}
@@ -434,6 +575,35 @@ class SKETCHNPR_OT_build_hatch_material(Operator):
                 obj.data.materials.append(mat)
 
         self.report({'INFO'}, f"Hatch-Material auf {len(targets)} Objekt(e) angewendet.")
+        return {'FINISHED'}
+
+
+class SKETCHNPR_OT_overlay_on_material(Operator):
+    bl_idname = "sketchnpr.overlay_on_material"
+    bl_label = "Auf bestehendes Material legen"
+    bl_description = ("Legt die Schraffur als Overlay auf das aktive Material jedes "
+                       "ausgewaehlten Objekts, ohne dessen bisheriges Shading zu ersetzen")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        settings = context.scene.sketch_npr
+        targets = [o for o in context.selected_objects if o.type == 'MESH' and o.active_material]
+        if not targets:
+            self.report({'WARNING'}, "Keine Mesh-Objekte mit aktivem Material ausgewaehlt.")
+            return {'CANCELLED'}
+
+        count = 0
+        for obj in targets:
+            try:
+                overlay_hatch_on_material(
+                    obj.active_material, settings.light,
+                    wobble=settings.wobble, blur=settings.blur,
+                )
+                count += 1
+            except Exception as e:
+                self.report({'WARNING'}, f"{obj.active_material.name}: {e}")
+
+        self.report({'INFO'}, f"Hatch-Overlay auf {count} Material(ien) angewendet.")
         return {'FINISHED'}
 
 
@@ -484,9 +654,13 @@ class SKETCHNPR_PT_main(Panel):
         box = layout.box()
         box.label(text="Schattierung (Hatching)", icon='SHADING_TEXTURE')
         box.prop(settings, "light")
+        box.prop(settings, "wobble")
+        box.prop(settings, "blur")
+        box.prop(settings, "transparent")
         row = box.row(align=True)
         row.operator(SKETCHNPR_OT_build_hatch_material.bl_idname)
         row.operator(SKETCHNPR_OT_refresh_light_driver.bl_idname, text="", icon='FILE_REFRESH')
+        box.operator(SKETCHNPR_OT_overlay_on_material.bl_idname)
         box.label(text="Tipp: Feintuning (Kontrast, Hatch Scale, Line Width)")
         box.label(text="direkt im Shader-Editor am 'NPR_Hatching'-Node.")
 
@@ -500,6 +674,7 @@ classes = (
     SKETCHNPR_OT_setup_scene,
     SKETCHNPR_OT_setup_lineart,
     SKETCHNPR_OT_build_hatch_material,
+    SKETCHNPR_OT_overlay_on_material,
     SKETCHNPR_OT_refresh_light_driver,
     SKETCHNPR_PT_main,
 )

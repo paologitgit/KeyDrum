@@ -34,6 +34,11 @@ Der Look besteht aus zwei getrennten, kombinierten Techniken:
    Szene als Quelle nutzt.
 3. **Schattierung (Hatching)**:
    - Licht-Objekt auswaehlen, dessen Rotation die Schraffur-Richtung steuert.
+   - **Wobble**: staerke der handgezeichneten Unregelmaessigkeit (0 = perfekt
+     gerade Linien, hoehere Werte = zittrige, organische Striche).
+   - **Blur**: Weichheit der Strichkanten (0 = harte Kante, hoehere Werte =
+     unscharfe/verwaschene Linien wie bei Tusche, die leicht verlaeuft).
+   - **Transparent**: siehe Abschnitt "Transparenz" unten.
    - Zielobjekte (Meshes) selektieren, "Hatch-Material auf Auswahl anwenden"
      klicken.
    - Aenderst du das Licht-Objekt nachtraeglich, auf den Refresh-Button
@@ -42,6 +47,45 @@ Der Look besteht aus zwei getrennten, kombinierten Techniken:
 Feintuning (Kontrast, Hatch-Skalierung, Linienbreite, Exposure) direkt im
 Shader-Editor am Node `NPR_Hatching` (als Group-Node in jedem Material, das
 du damit erstellt hast).
+
+## Transparenz / Schraffur ueber ein bestehendes Material legen
+
+Es gibt zwei Wege, dafuer zwei Buttons im Panel:
+
+**A) "Auf bestehendes Material legen"** (empfohlen fuer den Normalfall)
+Splict die Schraffur direkt in den Node-Baum des *aktiven* Materials jedes
+ausgewaehlten Objekts: dein bisheriges Shading (Principled BSDF, Texturen
+etc.) bleibt erhalten, die Tinte wird per Mix-Shader oben drueber gelegt.
+Kein Alpha-/Blend-Mode-Setup noetig, kein Z-Fighting, da es dieselbe
+Geometrie/denselben Material-Slot nutzt. Das ist der richtige Weg, wenn du
+"die Schraffur auf mein vorhandenes Material legen" meinst.
+
+**B) Checkbox "Transparent"** + "Hatch-Material auf Auswahl anwenden"
+Erzeugt ein eigenstaendiges Material, bei dem die Papierflaeche komplett
+durchsichtig ist (`Transparent BSDF`) und nur die Tinten-Striche opak bleiben
+(`blend_method = HASHED`). Sinnvoll, wenn du die Schraffur auf einem
+**separaten Overlay-Objekt** brauchst, z. B.:
+- eine leicht nach aussen versetzte Kopie deines Meshes (z. B. mit einem
+  Solidify-Modifier, Offset ~0.001) nur fuer die Schraffur, waehrend das
+  Original-Objekt sein eigenes Material behaelt,
+- eine Bildebene/Plane vor der Kamera, um die Schraffur separat zu
+  compositen (z. B. um sie im Compositor ueber ein Foto oder einen anderen
+  Render zu legen).
+
+**Manuelle Variante** (falls du es lieber selbst im Shader-Editor baust,
+oder der Automatismus bei deiner Materialstruktur nicht greift):
+1. Shader-Editor oeffnen, dein Material auswaehlen.
+2. `Add > Group > NPR_Hatching` einfuegen (die Node-Group existiert, sobald
+   einmal ein Hatch-Material im Addon erzeugt wurde).
+3. `Add > Shader > Emission`, `Color`-Ausgang der Group hineinstecken.
+4. `Add > Converter > Mix Shader`. `Fac` <- `Alpha`-Ausgang der Group.
+   Eingang 1 <- dein bisheriger Shader (z. B. Principled BSDF). Eingang 2
+   <- die Emission aus Schritt 3.
+5. Ausgang des Mix Shader in den `Surface`-Eingang des Material-Output
+   stecken (ersetzt die bisherige direkte Verbindung).
+6. Fuer echte Transparenz statt Ueberlagerung: `Add > Shader > Transparent
+   BSDF` statt deines bisherigen Shaders in Eingang 1 des Mix Shader, dann
+   am Material `Settings > Blend Mode` auf `Hashed` stellen.
 
 ## Bekannte Einschraenkungen / Testhinweise
 
