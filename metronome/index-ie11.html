@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metronom</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-direction: column;
+            flex-direction: column;
+            -ms-flex-align: center;
+            align-items: center;
+            -ms-flex-pack: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: #e0e0e0;
+        }
+
+        .metronome {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-direction: column;
+            flex-direction: column;
+            -ms-flex-align: center;
+            align-items: center;
+        }
+
+        .circle-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin-bottom: 40px;
+        }
+
+        svg.ring {
+            width: 280px;
+            height: 280px;
+            transform: rotate(-90deg);
+        }
+
+        .ring-bg {
+            fill: none;
+            stroke: #2a2a4a;
+            stroke-width: 12;
+        }
+
+        .ring-fill {
+            fill: none;
+            stroke: #e94560;
+            stroke-width: 12;
+            stroke-dasharray: 816.81;
+            stroke-dashoffset: 816.81;
+        }
+
+        .beat-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -45px;
+            margin-left: -50px;
+            width: 100px;
+            text-align: center;
+            font-size: 72px;
+            font-weight: 700;
+            color: #e94560;
+        }
+
+        .beat-dots {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-pack: center;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .beat-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #2a2a4a;
+            margin: 0 8px;
+        }
+
+        .beat-dot-active {
+            background: #e94560;
+        }
+
+        .beat-dot-accent {
+            background: #ff6b81;
+        }
+
+        .controls {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-direction: column;
+            flex-direction: column;
+            -ms-flex-align: center;
+            align-items: center;
+        }
+
+        .bpm-control {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-align: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .bpm-display {
+            font-size: 28px;
+            font-weight: 600;
+            min-width: 110px;
+            text-align: center;
+            margin: 0 10px;
+        }
+
+        .bpm-label {
+            font-size: 14px;
+            font-weight: 400;
+            color: #888;
+            display: block;
+        }
+
+        .bpm-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid #e94560;
+            background: transparent;
+            color: #e94560;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 0 4px;
+        }
+
+        .bpm-btn:hover {
+            background: #3a2a4a;
+        }
+
+        .bpm-btn-small {
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+        }
+
+        .slider-row {
+            margin-bottom: 20px;
+        }
+
+        .slider-row input {
+            width: 220px;
+        }
+
+        .btn-row {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-pack: center;
+            justify-content: center;
+        }
+
+        .action-btn {
+            height: 48px;
+            border-radius: 24px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 0 6px;
+        }
+
+        .start-btn {
+            width: 120px;
+            background: #e94560;
+            color: white;
+        }
+
+        .mute-btn {
+            width: 90px;
+            background: #2a2a4a;
+            border: 2px solid #e94560;
+            color: #e94560;
+        }
+
+        .mute-btn-active {
+            background: #e94560;
+            color: white;
+        }
+
+        .flash-btn {
+            width: 80px;
+            background: #2a2a4a;
+            border: 2px solid #e94560;
+            color: #e94560;
+        }
+
+        .flash-btn-active {
+            background: #e94560;
+            color: white;
+        }
+
+        .action-btn:hover {
+            opacity: 0.85;
+        }
+
+        .screen-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: transparent;
+            z-index: 9999;
+        }
+
+        .screen-flash-on {
+            background: rgba(233, 69, 96, 0.35);
+        }
+
+        .screen-flash-accent {
+            background: rgba(255, 107, 129, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="metronome">
+        <div class="circle-container">
+            <svg class="ring" viewBox="0 0 280 280">
+                <circle class="ring-bg" cx="140" cy="140" r="130" />
+                <circle class="ring-fill" id="ringFill" cx="140" cy="140" r="130" />
+            </svg>
+            <div class="beat-number" id="beatNumber">&ndash;</div>
+        </div>
+
+        <div class="beat-dots">
+            <div class="beat-dot" id="dot0"></div>
+            <div class="beat-dot" id="dot1"></div>
+            <div class="beat-dot" id="dot2"></div>
+            <div class="beat-dot" id="dot3"></div>
+        </div>
+
+        <div class="controls">
+            <div class="bpm-control">
+                <button class="bpm-btn" id="bpmDown5" type="button">&minus;5</button>
+                <button class="bpm-btn bpm-btn-small" id="bpmDown1" type="button">&minus;1</button>
+                <div class="bpm-display">
+                    <span class="bpm-label">BPM</span>
+                    <span id="bpmValue">120</span>
+                </div>
+                <button class="bpm-btn bpm-btn-small" id="bpmUp1" type="button">+1</button>
+                <button class="bpm-btn" id="bpmUp5" type="button">+5</button>
+            </div>
+            <div class="slider-row">
+                <input type="range" id="bpmSlider" min="30" max="240" value="120">
+            </div>
+            <div class="btn-row">
+                <button class="action-btn start-btn" id="startBtn" type="button">START</button>
+                <button class="action-btn mute-btn" id="muteBtn" type="button">MUTE</button>
+                <button class="action-btn flash-btn" id="flashBtn" type="button">FLASH</button>
+            </div>
+        </div>
+    </div>
+    <div class="screen-flash" id="screenFlash"></div>
+
+    <script>
+        var ringFill = document.getElementById('ringFill');
+        var beatNumber = document.getElementById('beatNumber');
+        var dots = [
+            document.getElementById('dot0'),
+            document.getElementById('dot1'),
+            document.getElementById('dot2'),
+            document.getElementById('dot3')
+        ];
+        var bpmValue = document.getElementById('bpmValue');
+        var bpmSlider = document.getElementById('bpmSlider');
+        var startBtn = document.getElementById('startBtn');
+        var muteBtn = document.getElementById('muteBtn');
+        var flashBtn = document.getElementById('flashBtn');
+        var screenFlash = document.getElementById('screenFlash');
+
+        var CIRCUMFERENCE = 2 * Math.PI * 130;
+        var bpm = 120;
+        var playing = false;
+        var muted = false;
+        var flashEnabled = false;
+        var currentBeat = 0;
+        var tickTimer = null;
+        var animTimer = null;
+        var beatStartMs = 0;
+
+        // --- WAV generation (IE11-compatible) ---
+        function writeString(view, offset, str) {
+            for (var i = 0; i < str.length; i++) {
+                view.setUint8(offset + i, str.charCodeAt(i));
+            }
+        }
+
+        function generateClickWav(frequency, vol) {
+            var sampleRate = 22050;
+            var duration = 0.04;
+            var numSamples = Math.floor(sampleRate * duration);
+            var dataSize = numSamples * 2;
+            var fileSize = 44 + dataSize;
+            var buffer = new ArrayBuffer(fileSize);
+            var view = new DataView(buffer);
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, fileSize - 8, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataSize, true);
+
+            for (var i = 0; i < numSamples; i++) {
+                var t = i / sampleRate;
+                var decay = Math.exp(-t * 50);
+                var sample = Math.sin(2 * Math.PI * frequency * t) * vol * decay;
+                var intSample = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
+                view.setInt16(44 + i * 2, intSample, true);
+            }
+
+            var binary = '';
+            var bytes = new Uint8Array(buffer);
+            for (var j = 0; j < bytes.length; j++) {
+                binary += String.fromCharCode(bytes[j]);
+            }
+            return 'data:audio/wav;base64,' + btoa(binary);
+        }
+
+        var accentWavUri = generateClickWav(1000, 1.0);
+        var normalWavUri = generateClickWav(700, 0.8);
+
+        function playClick(accent) {
+            if (muted) return;
+            try {
+                var audio = new Audio(accent ? accentWavUri : normalWavUri);
+                audio.volume = 1.0;
+                audio.play();
+            } catch (e) {}
+        }
+
+        // --- BPM ---
+        function getIntervalMs() {
+            return 60000 / bpm;
+        }
+
+        function setBpm(val) {
+            bpm = Math.max(30, Math.min(240, val));
+            bpmSlider.value = bpm;
+            bpmValue.innerHTML = bpm;
+        }
+
+        // --- Visuals ---
+        function clearDots() {
+            for (var i = 0; i < 4; i++) {
+                dots[i].className = 'beat-dot';
+            }
+        }
+
+        function updateDots(beat) {
+            clearDots();
+            if (beat === 0) {
+                dots[beat].className = 'beat-dot beat-dot-accent';
+            } else {
+                dots[beat].className = 'beat-dot beat-dot-active';
+            }
+        }
+
+        function updateCircle() {
+            if (!playing) return;
+
+            var now = (new Date()).getTime();
+            var interval = getIntervalMs();
+            var elapsed = now - beatStartMs;
+            var beatProgress = Math.min(elapsed / interval, 1);
+            var totalProgress = (currentBeat + beatProgress) / 4;
+            var offset = CIRCUMFERENCE * (1 - totalProgress);
+            ringFill.setAttribute('style', 'fill:none;stroke:#e94560;stroke-width:12;stroke-dasharray:' + CIRCUMFERENCE + ';stroke-dashoffset:' + offset);
+
+            if (flashEnabled) {
+                if (elapsed < 80) {
+                    screenFlash.className = currentBeat === 0 ? 'screen-flash screen-flash-accent' : 'screen-flash screen-flash-on';
+                } else {
+                    screenFlash.className = 'screen-flash';
+                }
+            }
+        }
+
+        // --- Tick ---
+        function tick() {
+            beatStartMs = (new Date()).getTime();
+            beatNumber.innerHTML = currentBeat + 1;
+            updateDots(currentBeat);
+            playClick(currentBeat === 0);
+            currentBeat = (currentBeat + 1) % 4;
+        }
+
+        // --- Start / Stop ---
+        function start() {
+            playing = true;
+            currentBeat = 0;
+            ringFill.setAttribute('style', 'fill:none;stroke:#e94560;stroke-width:12;stroke-dasharray:' + CIRCUMFERENCE + ';stroke-dashoffset:' + CIRCUMFERENCE);
+            tick();
+            tickTimer = setInterval(function () {
+                tick();
+            }, getIntervalMs());
+            animTimer = setInterval(updateCircle, 16);
+            startBtn.innerHTML = 'STOP';
+        }
+
+        function stop() {
+            playing = false;
+            clearInterval(tickTimer);
+            clearInterval(animTimer);
+            tickTimer = null;
+            animTimer = null;
+            ringFill.setAttribute('style', 'fill:none;stroke:#e94560;stroke-width:12;stroke-dasharray:' + CIRCUMFERENCE + ';stroke-dashoffset:' + CIRCUMFERENCE);
+            beatNumber.innerHTML = '&ndash;';
+            clearDots();
+            screenFlash.className = 'screen-flash';
+            startBtn.innerHTML = 'START';
+        }
+
+        function restart() {
+            if (playing) {
+                stop();
+                start();
+            }
+        }
+
+        // --- Events ---
+        startBtn.onclick = function () {
+            if (playing) { stop(); } else { start(); }
+        };
+
+        muteBtn.onclick = function () {
+            muted = !muted;
+            if (muted) {
+                muteBtn.className = 'action-btn mute-btn mute-btn-active';
+                muteBtn.innerHTML = 'UNMUTE';
+            } else {
+                muteBtn.className = 'action-btn mute-btn';
+                muteBtn.innerHTML = 'MUTE';
+            }
+        };
+
+        flashBtn.onclick = function () {
+            flashEnabled = !flashEnabled;
+            if (flashEnabled) {
+                flashBtn.className = 'action-btn flash-btn flash-btn-active';
+            } else {
+                flashBtn.className = 'action-btn flash-btn';
+                screenFlash.className = 'screen-flash';
+            }
+        };
+
+        bpmSlider.onchange = function () {
+            setBpm(parseInt(bpmSlider.value, 10));
+            restart();
+        };
+
+        bpmDown5.onclick = function () { setBpm(bpm - 5); restart(); };
+        bpmDown1.onclick = function () { setBpm(bpm - 1); restart(); };
+        bpmUp1.onclick = function () { setBpm(bpm + 1); restart(); };
+        bpmUp5.onclick = function () { setBpm(bpm + 5); restart(); };
+
+        document.onkeydown = function (e) {
+            var key = e.keyCode || e.which;
+            if (key === 32) {
+                if (e.preventDefault) e.preventDefault();
+                if (playing) { stop(); } else { start(); }
+            }
+        };
+    </script>
+</body>
+</html>
