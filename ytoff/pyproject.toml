@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ytoff"
+version = "0.1.0"
+description = "YouTube-Videos und ganze Kanaele fuer den privaten Offline-Gebrauch archivieren"
+requires-python = ">=3.10"
+dependencies = [
+    "yt-dlp>=2026.1.1",
+    "PyYAML>=6.0",
+    "imageio-ffmpeg>=0.5",
+    "mutagen>=1.47",   # Cover-Einbettung in m4a/mp4 ohne AtomicParsley
+]
+
+[project.scripts]
+ytoff = "ytoff.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ytoff*"]

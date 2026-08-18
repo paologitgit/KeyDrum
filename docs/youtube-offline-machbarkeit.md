@@ -1,6 +1,6 @@
 # Grobabklärung: Tool für YouTube-Videos & ganze Kanäle offline
 
-Stand: 2026-08-18 · Status: **Vorabklärung, noch keine Implementierung**
+Stand: 2026-08-18 · Status: **Abklärung abgeschlossen, Stufe 1 gebaut** → [`ytoff/`](../ytoff/README.md)
 
 ## Kurzfazit
 
@@ -107,12 +107,12 @@ Voreinstellung, nicht als Option für später.
 - DRM-geschützte Inhalte (YouTube Movies, gekaufte Filme) sind **außerhalb**
   des Scopes — dort ist Umgehung technisch wie rechtlich eine andere Sache.
 
-## Empfohlener nächster Schritt
+## Umgesetzt
 
-Stufe 1 bauen: CLI + Abo-YAML + Archiv-Sync, mit einem einzelnen Kanal als
-Testfall. Danach entscheiden, ob die Weboberfläche kommt.
+Stufe 1 liegt als `ytoff/` im Repo: CLI, Abo-YAML, Archiv-Sync, Vorschau mit
+Größenschätzung, `doctor` und `update`. Zielplattform macOS. Der Audio-Modus
+(`--audio`, m4a) ist gleich mitgekommen, weil er praktisch nichts extra kostet.
 
-Offene Fragen an dich, bevor ich loslege:
-- Zielplattform — Linux, macOS oder Windows?
-- Nur Video, oder auch reiner Audio-Modus (Podcast-Nutzung)?
-- Eigenes Repo anlegen, oder soll das hier als Unterordner leben?
+Bewusst noch offen: Weboberfläche (Stufe 2) und Cookie-Unterstützung für
+altersbeschränkte bzw. Mitglieder-Inhalte. Automatisierung (Stufe 3) ist als
+launchd-Vorlage im README dokumentiert statt als Code.
