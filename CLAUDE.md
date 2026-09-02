@@ -55,7 +55,9 @@ Abkürzungen gemäss S. 3: `n, v, adj, adv, prep, prep phr, conj, det, pron, phr
 
 **Motivierte erwachsene Lernende**, die selbstständig arbeiten und wissen wollen, wo sie stehen.
 
-- Deutsche Oberflächen- und Hilfetexte in der **Höflichkeitsform (Sie)**.
+- Die App ist **zweisprachig**: Bedienung, Erklärungen, Aufgabenstellungen und
+  Rückmeldungen auf **Deutsch in der Höflichkeitsform (Sie)**, alle Lerninhalte auf Englisch.
+  Beide Sprachen bleiben sichtbar getrennt (Typografie/Farbe), damit klar ist, was Lernstoff ist.
 - **Nicht belehrend, nicht kindlich.** Kein Duzen, keine Ausrufezeichen-Rhetorik,
   keine Emoji-Konfetti, keine „Super gemacht!"-Sprache, keine Maskottchen.
 - Rückmeldungen sind **sachlich und konkret**: was war richtig, was nicht, warum,
@@ -160,6 +162,19 @@ im Notbetrieb.
 
 ## 8. Technische Leitplanken
 
+**Plattform: Web-App als installierbare PWA.**
+
+- Reine Client-Anwendung aus statischen Dateien. **Kein Server, kein Backend, keine Build-Zeit-Abhängigkeit vom Netz.**
+- Ein **Service Worker** legt beim ersten Aufruf sämtliche Dateien im Cache ab
+  (Precaching, vollständige Liste, keine Nachladestrategie zur Laufzeit). Danach läuft
+  die App unverändert im Flugmodus, auch nach Neustart des Geräts.
+- **Installierbar** über Web-App-Manifest (eigenes Symbol, Vollbild), auf Notebook und Handy.
+- Bibliotheken und Schriften liegen im Repository, nicht auf einem CDN.
+- Lernstand in **IndexedDB**; die Anwendung bleibt bei geleertem Browser-Speicher
+  funktionsfähig und weist vor riskanten Aktionen auf den Export hin.
+- **Responsiv** ab Handy-Breite; alle Übungen sind mit Touch und mit Tastatur bedienbar.
+- Getestet wird gegen aktuelle Chrome-, Firefox- und Safari-Versionen.
+
 - **Datenmodell zuerst**: Wortdaten, Aufgaben und Lernstand sind getrennt und
   versioniert; jede Datendatei trägt eine Schema-Version.
 - Inhalte liegen **als Daten vor, nicht im Code**. Neue Übungen entstehen durch neue
@@ -177,7 +192,8 @@ im Notbetrieb.
 
 ## 9. Datenschutz
 
-- Keine Konten, keine Registrierung, keine Cloud, keine Telemetrie.
+- Die App ist ein **Werkzeug zum Selbstlernen**: keine Konten, keine Registrierung,
+  keine Cloud, keine Telemetrie, keine Auswertung durch Dritte.
 - Es werden nur Daten gespeichert, die für den Lernstand nötig sind.
 - Lernende können ihre Daten jederzeit einsehen, exportieren und vollständig löschen.
 
@@ -196,15 +212,31 @@ Eine Änderung gilt als fertig, wenn:
 
 ---
 
-## 11. Offene Entscheidungen
+## 11. Entschieden und offen
 
-Diese Punkte sind noch **nicht entschieden**. Bis zur Klärung wird hier nichts
-implementiert; Annahmen werden ausdrücklich als solche gekennzeichnet.
+**Entschieden:**
 
-- [ ] **Plattform und Technik**: Web-App/PWA, Desktop-Anwendung oder mobile App?
-- [ ] **Sprache der Oberfläche**: zweisprachig Deutsch–Englisch oder einsprachig Englisch?
-- [ ] **Übersetzungen**: Woher kommen die deutschen Bedeutungen der rund 3'200 Stichwörter (Lizenzfrage)?
-- [ ] **Nutzungsform**: reines Selbstlernen oder auch Einsatz im Kurs (Auswertung, Export für die Lehrperson)?
-- [ ] **Umfang Version 1**: Welcher der drei Bereiche startet zuerst?
-- [ ] **Ort des Projekts**: eigenes Repository oder Unterordner in diesem Repository (enthält bisher das unabhängige Projekt `KeyBand`)?
-- [ ] **Audio**: Aussprache der Stichwörter gewünscht? Offline bedeutet mitgelieferte Audiodateien.
+| Frage | Entscheidung |
+|-------|--------------|
+| Plattform | Web-App als installierbare PWA, vollständig offline |
+| Sprache | Zweisprachig: Bedienung Deutsch (Sie), Lerninhalte Englisch |
+| Nutzungsform | Reines Selbstlernen, Daten bleiben auf dem Gerät |
+| Umfang Version 1 | **Wortschatz zuerst**; Leseverstehen und Schreiben folgen darauf |
+
+Version 1 umfasst damit: Extraktion der Wortliste, Datenmodell, Wortschatzübungen im
+Satzkontext, Wiederholungsverfahren, Fortschrittsanzeige, Export/Import des Lernstands.
+Lesen und Schreiben werden im Datenmodell mitgedacht, aber noch nicht gebaut.
+
+**Noch offen** – bis zur Klärung wird hier nichts implementiert; Annahmen werden
+ausdrücklich als solche gekennzeichnet:
+
+- [ ] **Deutsche Bedeutungen**: Woher kommen die Übersetzungen der rund 3'200 Stichwörter?
+      Eigene Erstellung, freie Quelle (z. B. Wiktionary, CC-BY-SA) oder Lizenz? Die Antwort
+      bestimmt Aufwand und Rechtslage von Version 1.
+- [ ] **Ort des Projekts**: eigenes Repository oder Unterordner in diesem Repository
+      (enthält bisher das unabhängige Projekt `KeyBand`)?
+- [ ] **Audio**: Aussprache der Stichwörter gewünscht? Offline bedeutet mitgelieferte
+      Audiodateien (Umfang und Herkunft zu klären).
+- [ ] **Umfang je Lerneinheit**: Wie lang soll eine typische Sitzung sein (10, 15, 20 Minuten)?
+- [ ] **Auslieferung**: Wie erhalten Lernende die App – Link auf eine Adresse Ihrer Wahl,
+      oder als Ordner/ZIP zum lokalen Öffnen?
