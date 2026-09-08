@@ -1,0 +1,112 @@
+# Kopieren nach config/profil.yaml und ausfuellen.
+# Diese Datei steuert das gesamte Verhalten des Tools.
+
+person:
+  vorname: "Vorname"
+  nachname: "Nachname"
+  strasse: "Musterstrasse 1"
+  plz: "8000"
+  ort: "Zuerich"
+  email: "ihre.adresse@example.ch"
+  telefon: "+41 79 000 00 00"
+  linkedin: ""            # optional, erscheint im Briefkopf
+
+suche:
+  # Suchbegriffe. Jeder Begriff loest eine eigene Abfrage aus.
+  stichworte:
+    - "KI"
+    - "Kuenstliche Intelligenz"
+    - "Artificial Intelligence"
+    - "Prompt Engineering"
+    - "Automatisierung"
+    - "Prozessautomatisierung"
+    - "Lehrmittelentwicklung"
+    - "Instructional Design"
+    - "Digitale Transformation Bildung"
+  # Suchorte. Der Umkreis wird von der Plattform selbst angewendet.
+  orte:
+    - "Zuerich"
+  umkreis_km: 30
+  # Ortsnamen, die eine Stelle lokal passieren lassen. Zweite Absicherung,
+  # falls die Plattform den Umkreis grosszuegiger auslegt als gewuenscht.
+  erlaubte_orte:
+    - "Zuerich"
+    - "Zug"
+    - "Winterthur"
+    - "Baden"
+    - "Aarau"
+    - "Zug"
+  remote_ok: true         # Remote-Stellen auch ausserhalb der erlaubten Orte annehmen
+  nur_remote: false       # true = ausschliesslich Remote-Stellen
+  sprachen: ["de"]        # Sprache der Inserate, die beruecksichtigt werden
+  # Inserate mit einem dieser Begriffe im Titel werden sofort verworfen.
+  ausschluss_stichworte:
+    - "Praktikum"
+    - "Lehrstelle"
+    - "Werkstudent"
+    - "Trainee"
+    - "Temporaer"
+
+bewertung:
+  # Ab dieser Punktzahl (0-100) landet eine Stelle in der Freigabe.
+  schwelle: 70
+  # Hoechstzahl der Inserate, die pro Lauf vom Modell bewertet werden.
+  max_bewertungen_pro_lauf: 40
+  modell: "claude-opus-5"
+  # Ein Inserat muss mindestens einen dieser Begriffe im Text enthalten,
+  # sonst wird es gar nicht erst bewertet. Leer lassen = kein Vorfilter.
+  muss_stichworte:
+    - "KI"
+    - "AI"
+    - "Kuenstliche Intelligenz"
+    - "Automatisierung"
+    - "Prompt"
+    - "Lehrmittel"
+    - "Schulung"
+    - "Weiterbildung"
+
+anschreiben:
+  modell: "claude-opus-5"
+  anrede_unbekannt: "Sehr geehrte Damen und Herren"
+  gruss: "Freundliche Gruesse"
+  # Kurzprofil. Je konkreter, desto brauchbarer das Anschreiben.
+  profil_text: |
+    Ich unterrichte hauptberuflich Erwachsene und entwickle seit mehreren Jahren
+    Unterrichts- und Schulungsmaterial. Parallel dazu setze ich KI-Werkzeuge ein,
+    um wiederkehrende Ablaeufe zu vereinfachen: von der Erstellung von Anleitungen
+    und Lehrmitteln bis zur Automatisierung administrativer Routinen.
+
+    Erfahrung:
+    - Konzeption und Erstellung von Lehrmitteln und Anleitungen fuer Erwachsene
+    - Aufbau von KI-gestuetzten Ablaeufen (Textproduktion, Aufbereitung, Pruefung)
+    - Didaktische Aufbereitung komplexer Inhalte fuer heterogene Gruppen
+    - Schulung und Begleitung von Erwachsenen beim Einstieg in neue Werkzeuge
+  # Ein Absatz in Ihrem eigenen Ton. Das Modell orientiert sich am Stil,
+  # nicht am Inhalt. Weglassen ist moeglich, verschlechtert aber das Ergebnis.
+  stilbeispiel: |
+    Was mich an dieser Aufgabe reizt, ist die Verbindung von Technik und
+    Vermittlung. Ein Werkzeug entfaltet erst dann Wirkung, wenn die Menschen,
+    die damit arbeiten, es verstehen und ihm vertrauen.
+  # Themen, die im Anschreiben nicht vorkommen sollen.
+  tabu:
+    - "Gehaltsvorstellung"
+    - "Kuendigungsfrist"
+
+dokumente:
+  ordner: "dokumente"
+  # Diese Dateien haengen an jeder Bewerbung. Das erzeugte Anschreiben
+  # kommt automatisch dazu.
+  anhaenge:
+    - "Lebenslauf.pdf"
+
+versand:
+  betreff_vorlage: "Bewerbung als {titel}"
+  kopie_an_mich: true     # Blindkopie an Ihre eigene Adresse
+  signatur: |
+    {vorname} {nachname}
+    {strasse}, {plz} {ort}
+    {telefon} | {email}
+
+grenzen:
+  max_bewerbungen_pro_tag: 5
+  pause_sekunden: 4       # Wartezeit zwischen zwei Abfragen einer Plattform

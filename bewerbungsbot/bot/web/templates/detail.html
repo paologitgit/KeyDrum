@@ -1,0 +1,111 @@
+{% extends "basis.html" %}
+{% block titel %}{{ zeile['titel'] }} - Bewerbungsbot{% endblock %}
+{% block inhalt %}
+
+<p><a href="/" class="gedaempft">&larr; Zurueck zur Uebersicht</a></p>
+
+<div class="karte">
+  <h2 style="margin:0 0 4px">{{ zeile['titel'] }}</h2>
+  <p class="gedaempft" style="margin:0">
+    {{ zeile['firma'] }}{% if zeile['ort'] %} · {{ zeile['ort'] }}{% endif %}
+    {%- if zeile['pensum'] %} · {{ zeile['pensum'] }}{% endif %}
+    · {{ beschriftung.get(zeile['status'], zeile['status']) }}
+    {%- if zeile['url'] %} · <a href="{{ zeile['url'] }}" target="_blank" rel="noopener">Inserat oeffnen</a>{% endif %}
+  </p>
+
+  {% if zeile['punktzahl'] is not none %}
+    <p style="margin:12px 0 0">
+      <span class="punkte">{{ zeile['punktzahl'] }} Punkte</span> — {{ zeile['begruendung'] }}
+    </p>
+  {% endif %}
+</div>
+
+<form method="post" action="/stelle/{{ zeile['id'] }}/speichern" class="karte">
+  <label for="betreff">Betreff</label>
+  <input type="text" id="betreff" name="betreff" value="{{ zeile['betreff'] or '' }}">
+
+  <label for="empfaenger">Empfaengeradresse</label>
+  <input type="text" id="empfaenger" name="empfaenger"
+         value="{{ zeile['empfaenger'] or zeile['kontakt_email'] or '' }}"
+         placeholder="bewerbung@firma.ch">
+
+  <label for="anschreiben">Anschreiben</label>
+  <textarea id="anschreiben" name="anschreiben">{{ zeile['anschreiben'] or '' }}</textarea>
+
+  <label for="notiz">Notiz (nur fuer Sie)</label>
+  <input type="text" id="notiz" name="notiz" value="{{ zeile['notiz'] or '' }}">
+
+  <div class="reihe" style="margin-top:14px">
+    <button class="knopf wichtig">Speichern</button>
+    {% if zeile['anschreiben_pdf'] %}
+      <a class="knopf" href="/pdf/{{ zeile['id'] }}" target="_blank">PDF ansehen</a>
+    {% endif %}
+  </div>
+  <p class="gedaempft" style="font-size:13px">
+    Beim Speichern wird das PDF mit Ihrem bearbeiteten Text neu gesetzt.
+  </p>
+</form>
+
+<div class="karte">
+  <div class="reihe">
+    <form method="post" action="/stelle/{{ zeile['id'] }}/senden"
+          onsubmit="return confirm('Bewerbung jetzt an {{ zeile['empfaenger'] or zeile['kontakt_email'] or '(keine Adresse)' }} senden?')">
+      <button class="knopf wichtig">Freigeben und senden</button>
+    </form>
+    <form method="post" action="/stelle/{{ zeile['id'] }}/neu-verfassen">
+      <button class="knopf">Anschreiben neu verfassen</button>
+    </form>
+    <form method="post" action="/stelle/{{ zeile['id'] }}/verwerfen">
+      <button class="knopf">Verwerfen</button>
+    </form>
+    <form method="post" action="/stelle/{{ zeile['id'] }}/status" class="reihe">
+      <select name="status" class="knopf">
+        {% for wert, text in beschriftung.items() %}
+          <option value="{{ wert }}" {{ 'selected' if wert == zeile['status'] else '' }}>{{ text }}</option>
+        {% endfor %}
+      </select>
+      <button class="knopf">Status setzen</button>
+    </form>
+  </div>
+  {% if trockenlauf %}
+    <p class="hinweis" style="margin-bottom:0">
+      Der Probelauf ist aktiv: Die Mail wird nur als Datei unter ausgabe/postausgang abgelegt.
+      Fuer den echten Versand setzen Sie TROCKENLAUF=0 in der .env.
+    </p>
+  {% endif %}
+</div>
+
+{% if zeile['staerken'] or zeile['luecken'] %}
+<div class="karte">
+  <h3 style="margin-top:0">Einschaetzung</h3>
+  <div class="reihe" style="align-items:flex-start; gap:32px">
+    <div style="flex:1;min-width:220px">
+      <strong>Passt</strong>
+      <ul>{% for s in zeile['staerken']|fromjson %}<li>{{ s }}</li>{% endfor %}</ul>
+    </div>
+    <div style="flex:1;min-width:220px">
+      <strong>Offen</strong>
+      <ul>{% for s in zeile['luecken']|fromjson %}<li>{{ s }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="karte">
+  <h3 style="margin-top:0">Inserat</h3>
+  <div class="inserat">{{ zeile['beschreibung'] or 'Kein Text gespeichert.' }}</div>
+</div>
+
+<div class="karte">
+  <h3 style="margin-top:0">Verlauf</h3>
+  <table>
+    {% for e in ereignisse %}
+      <tr>
+        <td class="gedaempft" style="width:170px">{{ e['zeit'][:16].replace('T', ' ') }}</td>
+        <td style="width:110px">{{ e['art'] }}</td>
+        <td>{{ e['text'] }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

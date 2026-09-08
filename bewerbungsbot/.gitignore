@@ -1,0 +1,13 @@
+# Persönliche Daten und Zugangsdaten gehören nicht ins Repository
+.env
+config/profil.yaml
+config/manuelle_stellen.yaml
+dokumente/*
+!dokumente/.gitkeep
+ausgabe/
+*.sqlite
+*.sqlite-journal
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

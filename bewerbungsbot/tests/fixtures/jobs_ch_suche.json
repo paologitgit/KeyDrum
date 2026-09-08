@@ -1,0 +1,30 @@
+{
+  "num_pages": 3,
+  "documents": [
+    {
+      "job_id": "abc123",
+      "title": "KI-Spezialist:in Prozessautomatisierung 80-100%",
+      "company_name": "Muster AG",
+      "place": "Zürich",
+      "url": "/de/vacancies/detail/abc123/",
+      "publication_date": "2026-09-01",
+      "template_text": "<p>Sie führen KI-Werkzeuge ein und automatisieren Abläufe. Bewerbungen an <a href=\"mailto:jobs@muster.ch\">jobs@muster.ch</a></p>"
+    },
+    {
+      "job_id": "def456",
+      "title": "Praktikum Marketing",
+      "company_name": "Werbe GmbH",
+      "place": "Bern",
+      "url": "https://www.jobs.ch/de/vacancies/detail/def456/",
+      "template_text": "Praktikum im Bereich Social Media."
+    },
+    {
+      "job_id": "ghi789",
+      "title": "Lehrmittelentwicklung Erwachsenenbildung",
+      "company_name": "Bildung Plus",
+      "place": "Remote",
+      "publication_date": "2026-09-03",
+      "template_text": "Sie erstellen Lehrmittel und Anleitungen. Homeoffice möglich. 100%"
+    }
+  ]
+}

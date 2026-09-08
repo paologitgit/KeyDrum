@@ -1,0 +1,12 @@
+# Kopieren nach config/manuelle_stellen.yaml.
+# Inserate, welche die automatische Suche nicht findet oder nicht erreicht.
+# Eine blosse URL genuegt; die Angaben darunter sind optional und ueberschreiben,
+# was das Tool selbst aus der Seite liest.
+
+- https://www.jobs.ch/de/vacancies/detail/12345/
+
+- url: https://karriere.beispiel-firma.ch/stellen/ki-spezialist
+  titel: "KI-Spezialist:in Prozesse"
+  firma: "Beispiel Firma AG"
+  ort: "Winterthur"
+  email: "bewerbung@beispiel-firma.ch"

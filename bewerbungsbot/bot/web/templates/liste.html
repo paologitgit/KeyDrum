@@ -1,0 +1,51 @@
+{% extends "basis.html" %}
+{% block titel %}Uebersicht - Bewerbungsbot{% endblock %}
+{% block inhalt %}
+
+<div class="reiter">
+  {% for s in reihenfolge %}
+    <a href="/?status={{ s }}" class="{{ 'aktiv' if status == s else '' }}">
+      {{ beschriftung[s] }} ({{ zaehlung.get(s, 0) }})
+    </a>
+  {% endfor %}
+  <a href="/?status=alle" class="{{ 'aktiv' if status == 'alle' else '' }}">Alle</a>
+</div>
+
+<p class="gedaempft" style="margin-top:-8px">
+  Heute versendet: {{ heute }} von {{ tageslimit }}.
+</p>
+
+{% if not zeilen %}
+  <div class="karte">
+    <p>Hier ist noch nichts. Starten Sie oben rechts eine Suche.</p>
+  </div>
+{% else %}
+<table>
+  <tr>
+    <th style="width:60px">Punkte</th>
+    <th>Stelle</th>
+    <th style="width:170px">Firma</th>
+    <th style="width:110px">Ort</th>
+    <th style="width:130px">Bewerbungsweg</th>
+  </tr>
+  {% for z in zeilen %}
+  <tr>
+    <td class="punkte {{ 'hoch' if (z['punktzahl'] or 0) >= 80 else 'mittel' if (z['punktzahl'] or 0) >= 65 else 'tief' }}">
+      {{ z['punktzahl'] if z['punktzahl'] is not none else '–' }}
+    </td>
+    <td>
+      <a href="/stelle/{{ z['id'] }}">{{ z['titel'] }}</a>
+      {% if z['begruendung'] %}
+        <div class="gedaempft" style="font-size:13px">{{ z['begruendung'][:150] }}</div>
+      {% endif %}
+    </td>
+    <td>{{ z['firma'] }}</td>
+    <td>{{ z['ort'] }}</td>
+    <td class="gedaempft">
+      {% if z['kontakt_email'] or z['empfaenger'] %}E-Mail{% else %}Portal{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}
