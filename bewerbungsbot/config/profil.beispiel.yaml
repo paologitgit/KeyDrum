@@ -6,7 +6,7 @@ person:
   nachname: "Nachname"
   strasse: "Musterstrasse 1"
   plz: "8000"
-  ort: "Zuerich"
+  ort: "Zürich"
   email: "ihre.adresse@example.ch"
   telefon: "+41 79 000 00 00"
   linkedin: ""            # optional, erscheint im Briefkopf
@@ -24,18 +24,18 @@ suche:
     - "Instructional Design"
     - "Digitale Transformation Bildung"
   # Suchorte. Der Umkreis wird von der Plattform selbst angewendet.
+  # Umlaute und Umschrift gelten als gleich: "Zuerich" trifft auch "Zürich".
   orte:
-    - "Zuerich"
+    - "Zürich"
   umkreis_km: 30
   # Ortsnamen, die eine Stelle lokal passieren lassen. Zweite Absicherung,
   # falls die Plattform den Umkreis grosszuegiger auslegt als gewuenscht.
   erlaubte_orte:
-    - "Zuerich"
+    - "Zürich"
     - "Zug"
     - "Winterthur"
     - "Baden"
     - "Aarau"
-    - "Zug"
   remote_ok: true         # Remote-Stellen auch ausserhalb der erlaubten Orte annehmen
   nur_remote: false       # true = ausschliesslich Remote-Stellen
   sprachen: ["de"]        # Sprache der Inserate, die beruecksichtigt werden

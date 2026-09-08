@@ -56,3 +56,39 @@ def test_grobfilter_laesst_stellen_ohne_ortsangabe_durch(profil):
 def test_grobfilter_greift_vor_dem_nachladen(profil):
     stelle = Stelle(titel="Lehrstelle Informatik", firma="Muster AG", ort="Zuerich")
     assert grobfilter(stelle, profil)[0] is False
+
+
+def test_umlaut_und_umschrift_gelten_als_gleich(profil):
+    """Das Profil schreibt 'Zuerich', die Plattform liefert 'Zürich'."""
+    stelle = Stelle(titel="KI-Spezialist", firma="Muster AG", ort="Zürich",
+                    beschreibung="KI und Automatisierung")
+    assert ort_passt(stelle, profil) is True
+    assert vorfilter(stelle, profil)[0] is True
+
+
+def test_umschrift_im_profil_trifft_umlaut_im_titel(profil):
+    profil.suche["ausschluss_stichworte"] = ["Temporaer"]
+    stelle = Stelle(titel="KI-Spezialist temporär", firma="Muster AG", ort="Zürich",
+                    beschreibung="KI und Automatisierung")
+    durch, grund = vorfilter(stelle, profil)
+    assert durch is False and "Temporaer" in grund
+
+
+def test_umlaut_im_profil_trifft_umschrift_der_plattform(profil):
+    profil.suche["erlaubte_orte"] = ["Zürich"]
+    stelle = Stelle(titel="KI-Spezialist", firma="Muster AG", ort="Zuerich",
+                    beschreibung="KI und Automatisierung")
+    assert ort_passt(stelle, profil) is True
+
+
+def test_muss_stichwort_mit_umlaut(profil):
+    profil.bewertung["muss_stichworte"] = ["Kuenstliche"]
+    stelle = Stelle(titel="Fachperson Daten", firma="Muster AG", ort="Zürich",
+                    beschreibung="Wir arbeiten mit Künstlicher Intelligenz.")
+    assert vorfilter(stelle, profil)[0] is True
+
+
+def test_remote_mit_umlaut(profil):
+    stelle = Stelle(titel="KI-Spezialist", firma="Muster AG", ort="Genf",
+                    beschreibung="KI und Automatisierung, ortsunabhängig moeglich")
+    assert ist_remote(stelle) is True

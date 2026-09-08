@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any
 
 import anthropic
@@ -11,9 +12,10 @@ from .klient import antwort_json
 from .konfig import Profil
 from .modelle import Bewertung, Stelle
 
+# Der Vergleich laeuft ueber falten(), deshalb stehen hier nur Umschriftformen.
 REMOTE_HINWEISE = (
     "remote", "homeoffice", "home office", "home-office", "telearbeit",
-    "ortsunabhängig", "ortsunabhaengig", "wfh", "work from home",
+    "ortsunabhaengig", "wfh", "work from home", "mobiles arbeiten",
 )
 
 BEWERTUNGS_SCHEMA: dict[str, Any] = {
@@ -56,8 +58,22 @@ Massstab fuer die Punktzahl:
 Antworten Sie ausschliesslich im vorgegebenen JSON-Format, auf Deutsch."""
 
 
+# Umlaute werden auf ihre Umschrift abgebildet, damit "Zuerich" im Profil auch
+# das "Zürich" der Plattform trifft - und umgekehrt.
+_UMSCHRIFT = str.maketrans({
+    "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue", "ß": "ss",
+})
+
+
+def falten(text: str) -> str:
+    """Kleinschreibung ohne Umlaute und ohne Akzente - fuer jeden Textvergleich."""
+    ohne_umlaut = (text or "").lower().translate(_UMSCHRIFT)
+    zerlegt = unicodedata.normalize("NFKD", ohne_umlaut)
+    return "".join(z for z in zerlegt if not unicodedata.combining(z))
+
+
 def _text(stelle: Stelle) -> str:
-    return f"{stelle.titel}\n{stelle.beschreibung}".lower()
+    return falten(f"{stelle.titel}\n{stelle.beschreibung}")
 
 
 def ist_remote(stelle: Stelle) -> bool:
@@ -71,11 +87,11 @@ def ort_passt(stelle: Stelle, profil: Profil) -> bool:
     if suche.get("nur_remote"):
         return ist_remote(stelle)
 
-    erlaubt = [o.lower() for o in suche.get("erlaubte_orte", []) if o]
+    erlaubt = [falten(o) for o in suche.get("erlaubte_orte", []) if o]
     if not erlaubt:
         return True  # keine Ortsliste hinterlegt: nicht filtern
 
-    ort = (stelle.ort or "").lower()
+    ort = falten(stelle.ort)
     if any(e in ort for e in erlaubt):
         return True
     return bool(suche.get("remote_ok")) and ist_remote(stelle)
@@ -89,9 +105,9 @@ def grobfilter(stelle: Stelle, profil: Profil) -> tuple[bool, str]:
     if not stelle.titel or not stelle.firma:
         return False, "Unvollstaendiges Inserat"
 
-    titel = stelle.titel.lower()
+    titel = falten(stelle.titel)
     for wort in profil.suche.get("ausschluss_stichworte", []):
-        if wort and wort.lower() in titel:
+        if wort and falten(wort) in titel:
             return False, f"Ausschlussbegriff im Titel: {wort}"
 
     # Der Ort wird nur geprueft, wenn er in der Trefferliste ueberhaupt steht.
@@ -109,15 +125,15 @@ def vorfilter(stelle: Stelle, profil: Profil) -> tuple[bool, str]:
     if not stelle.titel or not stelle.firma:
         return False, "Unvollstaendiges Inserat"
 
-    titel = stelle.titel.lower()
+    titel = falten(stelle.titel)
     for wort in profil.suche.get("ausschluss_stichworte", []):
-        if wort and wort.lower() in titel:
+        if wort and falten(wort) in titel:
             return False, f"Ausschlussbegriff im Titel: {wort}"
 
     if not ort_passt(stelle, profil):
         return False, f"Ort ausserhalb des Suchgebiets: {stelle.ort or 'unbekannt'}"
 
-    muss = [w.lower() for w in profil.bewertung.get("muss_stichworte", []) if w]
+    muss = [falten(w) for w in profil.bewertung.get("muss_stichworte", []) if w]
     if muss:
         volltext = _text(stelle)
         if not any(w in volltext for w in muss):
