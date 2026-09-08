@@ -124,3 +124,56 @@ def test_ausdruecklich_gewaehlter_reiter_bleibt_leer(tmp_path, profil, zugang, s
     with TestClient(anwendung(profil, zugang, ablage)) as klient:
         assert "KI-Spezialist" not in klient.get(f"/?status={ENTWURF}").text
     ablage.schliessen()
+
+
+def test_lauf_blockiert_die_antwort_nicht(klient_mit_stelle, monkeypatch):
+    """Der Klick auf 'Neue Suche starten' kehrt sofort zurueck."""
+    import threading as _threading
+    import time
+
+    gestartet = _threading.Event()
+    fertig = _threading.Event()
+
+    def langsamer_lauf(*_args, **_kwargs):
+        gestartet.set()
+        time.sleep(0.3)
+        fertig.set()
+        return {"suche": {"neu": 0}, "entwuerfe": {"entworfen": 0}, "wartet_auf_freigabe": 0}
+
+    monkeypatch.setattr("bot.web.app.pipeline.lauf", langsamer_lauf)
+    monkeypatch.setattr("bot.web.app.klient", lambda *_a, **_k: None)
+
+    klient, _, _ = klient_mit_stelle
+    beginn = time.monotonic()
+    antwort = klient.post("/lauf", follow_redirects=True)
+    dauer = time.monotonic() - beginn
+
+    assert antwort.status_code == 200
+    assert dauer < 0.25, "Die Antwort haette nicht auf den Lauf warten duerfen."
+    assert gestartet.wait(timeout=2)
+    assert fertig.wait(timeout=2)
+
+
+def test_lauf_verwendet_einen_daemon_faden(klient_mit_stelle, monkeypatch):
+    """Ein laufender Auftrag darf das Beenden des Servers nicht aufhalten."""
+    import threading as _threading
+
+    laeuft = _threading.Event()
+    weiter = _threading.Event()
+
+    def haengender_lauf(*_args, **_kwargs):
+        laeuft.set()
+        weiter.wait(timeout=5)
+        return {"suche": {"neu": 0}, "entwuerfe": {"entworfen": 0}, "wartet_auf_freigabe": 0}
+
+    monkeypatch.setattr("bot.web.app.pipeline.lauf", haengender_lauf)
+    monkeypatch.setattr("bot.web.app.klient", lambda *_a, **_k: None)
+
+    klient, _, _ = klient_mit_stelle
+    klient.post("/lauf", follow_redirects=True)
+    assert laeuft.wait(timeout=2)
+
+    faden = next(f for f in _threading.enumerate() if f.name == "bewerbungslauf")
+    assert faden.daemon is True
+    weiter.set()
+    faden.join(timeout=5)

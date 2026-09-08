@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -155,7 +155,7 @@ def anwendung(profil: Profil, zugang: Zugang, ablage: Ablage) -> FastAPI:
         return FileResponse(pfad, media_type="application/pdf", filename=pfad.name)
 
     @app.post("/lauf")
-    def lauf_starten(hintergrund: BackgroundTasks) -> RedirectResponse:
+    def lauf_starten() -> RedirectResponse:
         if zustand["laeuft"]:
             zustand["meldung"] = "Es laeuft bereits eine Suche."
             return RedirectResponse("/", status_code=303)
@@ -175,7 +175,10 @@ def anwendung(profil: Profil, zugang: Zugang, ablage: Ablage) -> FastAPI:
                 finally:
                     zustand["laeuft"] = False
 
-        hintergrund.add_task(arbeiten)
+        # Bewusst ein eigener Nebenlaeufer als daemon statt einer BackgroundTask:
+        # Ein Lauf dauert wegen der Hoeflichkeitspausen Minuten, und der Server
+        # soll sich waehrenddessen jederzeit mit Ctrl+C beenden lassen.
+        threading.Thread(target=arbeiten, name="bewerbungslauf", daemon=True).start()
         zustand["meldung"] = "Suche gestartet. Die Seite in ein bis zwei Minuten neu laden."
         return RedirectResponse("/", status_code=303)
 
