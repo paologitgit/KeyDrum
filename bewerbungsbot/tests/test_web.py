@@ -105,3 +105,22 @@ def test_status_liste_gefiltert(klient_mit_stelle):
     klient, _, _ = klient_mit_stelle
     assert "KI-Spezialist" in klient.get(f"/?status={ENTWURF}").text
     assert "KI-Spezialist" not in klient.get(f"/?status={VERWORFEN}").text
+
+
+def test_startseite_zeigt_den_ersten_gefuellten_reiter(tmp_path, profil, zugang, stelle):
+    """Wer nur gesucht hat, soll die neuen Stellen sehen, nicht eine leere Freigabe."""
+    ablage = Ablage(tmp_path / "neu.sqlite")
+    ablage.aufnehmen(stelle)  # Status 'neu', kein Entwurf vorhanden
+    with TestClient(anwendung(profil, zugang, ablage)) as klient:
+        antwort = klient.get("/")
+        assert antwort.status_code == 200
+        assert "KI-Spezialist" in antwort.text
+    ablage.schliessen()
+
+
+def test_ausdruecklich_gewaehlter_reiter_bleibt_leer(tmp_path, profil, zugang, stelle):
+    ablage = Ablage(tmp_path / "neu2.sqlite")
+    ablage.aufnehmen(stelle)
+    with TestClient(anwendung(profil, zugang, ablage)) as klient:
+        assert "KI-Spezialist" not in klient.get(f"/?status={ENTWURF}").text
+    ablage.schliessen()

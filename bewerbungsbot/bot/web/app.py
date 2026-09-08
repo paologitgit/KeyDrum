@@ -63,12 +63,19 @@ def anwendung(profil: Profil, zugang: Zugang, ablage: Ablage) -> FastAPI:
         )
 
     @app.get("/", response_class=HTMLResponse)
-    def liste(request: Request, status: str = ENTWURF) -> HTMLResponse:
+    def liste(request: Request, status: str | None = None) -> HTMLResponse:
+        zaehlung = ablage.zaehlung()
+        if status is None:
+            # Beim Aufruf ohne Reiter nicht stur auf die Freigabe zeigen: Wer nur
+            # gesucht hat, saehe sonst eine leere Seite, obwohl Treffer vorliegen.
+            status = next(
+                (s for s in STATUS_REIHENFOLGE if zaehlung.get(s)), ENTWURF
+            )
         zeilen = ablage.alle() if status == "alle" else ablage.nach_status(status)
         return seite(
             request, "liste.html",
             zeilen=zeilen, status=status,
-            zaehlung=ablage.zaehlung(),
+            zaehlung=zaehlung,
             reihenfolge=STATUS_REIHENFOLGE,
             heute=ablage.heute_versendet(),
             tageslimit=int(profil.grenzen.get("max_bewerbungen_pro_tag", 5)),
