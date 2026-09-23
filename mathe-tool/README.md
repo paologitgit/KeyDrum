@@ -4,7 +4,13 @@ Ein Lerntool für Mathematik auf Niveau 1. Sekundarstufe (7. Schuljahr) nach Leh
 
 ## Starten
 
-Öffnen Sie `index.html` per Doppelklick in einem aktuellen Browser. Eine Internetverbindung ist nicht nötig.
+**Am einfachsten:** Öffnen Sie `Mathe-1-Sek.html` per Doppelklick. Diese Datei enthält alles und funktioniert auch allein, z. B. als E-Mail-Anhang oder auf einem USB-Stick.
+
+Alternativ öffnen Sie `index.html`. Dann müssen die Ordner `css` und `js` daneben liegen. Eine ZIP-Datei muss deshalb zuerst vollständig entpackt werden.
+
+Eine Internetverbindung ist in beiden Fällen nicht nötig.
+
+Nach Änderungen an den Quelldateien erzeugt `python3 werkzeuge/einzeldatei.py` die Datei `Mathe-1-Sek.html` neu.
 
 Zum Veröffentlichen genügt ein einfacher Webspace oder GitHub Pages. Dafür wird einfach der ganze Ordner `mathe-tool` hochgeladen.
 

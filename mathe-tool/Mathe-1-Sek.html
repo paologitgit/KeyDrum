@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mathematik 1. Sek</title>
+  <meta name="description" content="Einführungen und Übungen in drei Stufen zu Themen der 1. Sekundarstufe nach Lehrplan 21.">
+  <style>
+/* Farben als Variablen; Dunkelmodus folgt der Systemeinstellung. */
+:root {
+  --bg: #f5f6f8;
+  --flaeche: #ffffff;
+  --flaeche-2: #eef1f5;
+  --text: #1c2230;
+  --text-2: #586173;
+  --linie: #d9dee6;
+  --akzent: #2c5aa8;
+  --akzent-text: #ffffff;
+  --akzent-hell: #e6edf9;
+  --b: #b4531b;
+  --gut: #1d7349;
+  --gut-hell: #e2f3e9;
+  --fehler: #ad2a22;
+  --fehler-hell: #fbe8e6;
+  --hinweis: #7c5500;
+  --hinweis-hell: #fcf2da;
+  --radius: 10px;
+  --schatten: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .04);
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13161b;
+    --flaeche: #1c2027;
+    --flaeche-2: #252a33;
+    --text: #e5e8ee;
+    --text-2: #a0a8b6;
+    --linie: #343b47;
+    --akzent: #86aaf0;
+    --akzent-text: #0f1a2e;
+    --akzent-hell: #212e47;
+    --b: #f0a36f;
+    --gut: #72cf9d;
+    --gut-hell: #19302a;
+    --fehler: #f3958d;
+    --fehler-hell: #3a2020;
+    --hinweis: #e8c26c;
+    --hinweis-hell: #342b17;
+    --schatten: none;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.breite {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+a { color: var(--akzent); }
+
+h1 { font-size: 1.75rem; line-height: 1.25; margin: .4em 0 .3em; }
+h2 { font-size: 1.2rem; line-height: 1.3; margin: 0 0 .5em; }
+h3 { font-size: 1rem; margin: 0 0 .4em; }
+
+.lead { color: var(--text-2); margin-top: 0; }
+.klein { font-size: .92rem; color: var(--text-2); }
+
+/* Kopf und Fuss */
+.kopf {
+  background: var(--flaeche);
+  border-bottom: 1px solid var(--linie);
+}
+.kopf .breite { padding-top: 14px; padding-bottom: 14px; }
+.marke { font-weight: 650; text-decoration: none; color: var(--text); letter-spacing: .01em; }
+
+main { padding-top: 12px; padding-bottom: 40px; outline: none; }
+
+.fuss {
+  color: var(--text-2);
+  font-size: .85rem;
+  padding-top: 16px;
+  padding-bottom: 32px;
+  border-top: 1px solid var(--linie);
+}
+
+.pfad { font-size: .9rem; color: var(--text-2); margin-top: 8px; }
+.pfad a { color: var(--text-2); }
+
+/* Karten */
+.karte {
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  border-radius: var(--radius);
+  box-shadow: var(--schatten);
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.themen { display: grid; gap: 14px; margin: 20px 0; }
+.thema-karte { display: block; margin: 0; text-decoration: none; color: inherit; transition: border-color .15s; }
+a.thema-karte:hover { border-color: var(--akzent); }
+.thema-karte p { margin: .2em 0 .6em; color: var(--text-2); }
+.thema-karte h2 { margin: .35em 0 .2em; }
+.gesperrt { opacity: .62; }
+
+.etikett {
+  display: inline-block;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--akzent);
+  background: var(--akzent-hell);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.pillen { display: flex; flex-wrap: wrap; gap: 6px; }
+.pille {
+  font-size: .8rem;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--linie);
+  color: var(--text-2);
+}
+.pille.begonnen { border-color: var(--hinweis); color: var(--hinweis); }
+.pille.fertig { background: var(--gut-hell); border-color: var(--gut); color: var(--gut); }
+.pille.fertig::before { content: "✓ "; }
+
+.status { font-size: .9rem; color: var(--text-2); margin: .3em 0 0; }
+.status.fertig { color: var(--gut); font-weight: 600; }
+.status.begonnen { color: var(--hinweis); }
+
+/* Stufen */
+.stufen { margin: 16px 0; }
+.stufe-karte {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.stufe-karte p { margin: .2em 0; }
+.stufe-karte > .knopf { flex-shrink: 0; }
+@media (max-width: 560px) {
+  .stufe-karte { flex-direction: column; align-items: stretch; }
+}
+
+/* Knöpfe */
+.knopf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--linie);
+  background: var(--flaeche);
+  color: var(--text);
+  font: inherit;
+  font-weight: 550;
+  text-decoration: none;
+  cursor: pointer;
+}
+.knopf:hover { border-color: var(--akzent); }
+.knopf.primaer { background: var(--akzent); border-color: var(--akzent); color: var(--akzent-text); }
+.knopf.primaer:hover { filter: brightness(1.08); }
+.knopf.leise { color: var(--text-2); }
+.knopf:disabled { opacity: .5; cursor: default; }
+.knopf:focus-visible, .option:focus-visible, .link:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--akzent);
+  outline-offset: 2px;
+}
+.knopf-reihe { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+
+.link {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  color: var(--akzent);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* Meldungen */
+.rm {
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  border-left: 4px solid;
+}
+.rm.gut { background: var(--gut-hell); border-color: var(--gut); }
+.rm.fehler { background: var(--fehler-hell); border-color: var(--fehler); }
+.rm.hinweis { background: var(--hinweis-hell); border-color: var(--hinweis); }
+
+/* Einführung */
+.inhalt ol { margin: 0; padding-left: 1.4em; }
+.abschnitt { scroll-margin-top: 16px; }
+.abschnitt ul { padding-left: 1.3em; }
+.abschnitt li { margin: .25em 0; }
+.begriffe dt { font-weight: 650; margin-top: .5em; }
+.begriffe dd { margin: 0 0 0 1em; }
+.muster { display: grid; gap: 2px; margin: 10px 0; font-variant-numeric: tabular-nums; }
+.muster span { padding: 3px 10px; border-radius: 6px; }
+.muster .hervor { background: var(--akzent-hell); font-weight: 600; }
+.farbe-b { color: var(--b); font-weight: 650; }
+.ende { text-align: center; margin: 28px 0; }
+
+.tabelle { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: .95rem; }
+.tabelle th, .tabelle td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--linie); }
+.tabelle th { color: var(--text-2); font-weight: 600; }
+@media (max-width: 520px) {
+  .tabelle { font-size: .85rem; }
+  .tabelle th, .tabelle td { padding: 6px 5px; }
+}
+
+details.beispiel {
+  border: 1px solid var(--linie);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 10px 0;
+}
+details summary { cursor: pointer; font-weight: 550; }
+details[open] summary { margin-bottom: 6px; }
+
+/* Interaktive Elemente */
+.widget {
+  background: var(--flaeche-2);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+.regler-gruppe { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.regler { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .92rem; color: var(--text-2); }
+.regler input[type=range] { flex: 1; min-width: 120px; accent-color: var(--akzent); }
+.regler output { font-weight: 650; color: var(--text); min-width: 2.5em; font-variant-numeric: tabular-nums; }
+.regler select { font: inherit; padding: 6px; border-radius: 6px; border: 1px solid var(--linie); background: var(--flaeche); color: var(--text); }
+.widget-text { margin: 6px 0 0; }
+
+/* Terme */
+.term {
+  font-size: 1.45rem;
+  font-weight: 600;
+  margin: 10px 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+.term.gross { font-size: 1.25rem; }
+.term.inline { display: inline; font-size: 1.05rem; margin: 0; }
+.luecke { color: var(--akzent); }
+
+/* Zahlengerade */
+.bild { margin: 8px 0; }
+svg.zg { width: 100%; height: auto; display: block; overflow: visible; }
+.zg-achse { stroke: var(--text-2); stroke-width: 1.5; }
+.zg-spitze-achse { fill: var(--text-2); }
+.zg-strich { stroke: var(--text-2); stroke-width: 1; }
+.zg-strich.gross { stroke: var(--text); stroke-width: 1.6; }
+.zg-zahl { fill: var(--text-2); font-size: 15px; text-anchor: middle; font-family: inherit; }
+.zg-punkt { fill: var(--akzent); stroke: var(--flaeche); stroke-width: 2; }
+.zg-punkt.b { fill: var(--b); }
+.zg-marke { fill: var(--akzent); font-size: 16px; font-weight: 700; text-anchor: middle; font-family: inherit; }
+.zg-marke.b { fill: var(--b); }
+.zg-pfeil { fill: none; stroke: var(--b); stroke-width: 2.5; }
+.zg-spitze { fill: var(--b); }
+@media (max-width: 520px) {
+  .zg-zahl { font-size: 20px; }
+  .zg-marke { font-size: 21px; }
+}
+
+/* Übung */
+.stand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: .92rem;
+  color: var(--text-2);
+}
+.punkte { display: flex; gap: 5px; }
+.punkt {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--linie);
+}
+.punkt.gut { background: var(--gut); border-color: var(--gut); }
+.punkt.falsch { background: var(--fehler-hell); border-color: var(--fehler); }
+
+.aufgabe .frage p { margin: .3em 0; }
+.aufgabe blockquote {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-left: 4px solid var(--akzent);
+  background: var(--akzent-hell);
+  border-radius: 0 8px 8px 0;
+  font-weight: 550;
+}
+
+.eingabe-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 4px; }
+.zahl-eingabe {
+  width: 8.5em;
+  min-height: 44px;
+  font: inherit;
+  font-size: 1.2rem;
+  padding: 6px 12px;
+  border: 1.5px solid var(--linie);
+  border-radius: 8px;
+  background: var(--flaeche);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.vorzeichen { padding: 8px 14px; font-size: 1.1rem; }
+.einheit { color: var(--text-2); }
+
+.optionen { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 14px 0 4px; }
+.option {
+  min-height: 48px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 550;
+  border-radius: 8px;
+  border: 1.5px solid var(--linie);
+  background: var(--flaeche);
+  color: var(--text);
+  cursor: pointer;
+  white-space: pre;
+}
+.option:hover:not(:disabled) { border-color: var(--akzent); }
+.option:disabled { cursor: default; }
+.option.gut { border-color: var(--gut); background: var(--gut-hell); color: var(--gut); opacity: 1; }
+.option.falsch { border-color: var(--fehler); background: var(--fehler-hell); color: var(--fehler); }
+
+.loesung { margin-top: 8px; }
+.loesung.offen { border-top: 1px solid var(--linie); padding-top: 12px; }
+.schritte { padding-left: 1.4em; margin: .4em 0; }
+.schritte li { margin: .3em 0; font-variant-numeric: tabular-nums; }
+.weiter-zeile { margin-top: 14px; }
+</style>
+</head>
+<body>
+  <header class="kopf">
+    <div class="breite">
+      <a href="#/" class="marke">Mathematik · 1. Sek</a>
+    </div>
+  </header>
+
+  <main id="app" class="breite" tabindex="-1">
+    <noscript><p>Für dieses Lerntool muss JavaScript aktiviert sein.</p></noscript>
+  </main>
+
+  <footer class="fuss breite">
+    Lehrplan 21, Zyklus 3 · Der Lernstand wird nur in diesem Browser gespeichert.
+  </footer>
+
+  <!-- Normale Skripte statt ES-Module, damit die Seite auch per Doppelklick (file://) funktioniert. -->
+  <script>
+/* Allgemeine Hilfsfunktionen: Zufallszahlen, Zahlformat, Zahlengerade als SVG. */
+window.MT = window.MT || {};
+MT.themen = [];
+
+(function (MT) {
+  'use strict';
+
+  /** Ganze Zufallszahl zwischen a und b (beide inklusive). */
+  MT.rnd = function (a, b) {
+    return a + Math.floor(Math.random() * (b - a + 1));
+  };
+
+  /** Wie rnd, aber nie 0. */
+  MT.rndNZ = function (a, b) {
+    let x;
+    do { x = MT.rnd(a, b); } while (x === 0);
+    return x;
+  };
+
+  MT.pick = function (arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  };
+
+  MT.shuffle = function (arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  /** Zahl mit typografischem Minuszeichen: −7 */
+  MT.z = function (n) {
+    return n < 0 ? '−' + Math.abs(n) : String(n);
+  };
+
+  /** Negative Zahl in Klammern: (−7); positive Zahl ohne Klammern. */
+  MT.k = function (n) {
+    return n < 0 ? '(−' + Math.abs(n) + ')' : String(n);
+  };
+
+  MT.esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+
+  MT.term = function (s) {
+    return '<div class="term">' + s + '</div>';
+  };
+
+  MT.schritte = function (arr) {
+    return '<ol class="schritte">' + arr.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>';
+  };
+
+  /**
+   * Zahlengerade als SVG.
+   * o.min, o.max        Bereich (ganze Zahlen)
+   * o.beschriftung      jede wievielte Zahl beschriftet wird (Standard 5)
+   * o.punkte            [{x, text, art:'b'}]  markierte Punkte (art 'b' = zweite Farbe)
+   * o.pfeile            [{von, bis}]           Bewegung als Bogenpfeil
+   */
+  let zaehler = 0;
+  MT.zahlengerade = function (o) {
+    const min = o.min, max = o.max, beschr = o.beschriftung || 5;
+    const punkte = o.punkte || [], pfeile = o.pfeile || [];
+    const W = 640, P = 24;
+    const y = pfeile.length ? 70 : 24;
+    const H = y + (punkte.some(function (p) { return p.text; }) ? 56 : 36);
+    const sx = function (x) { return P + (x - min) * (W - 2 * P) / (max - min); };
+    const id = 'zg' + (++zaehler);
+    const aria = o.aria || ('Zahlengerade von ' + MT.z(min) + ' bis ' + MT.z(max));
+
+    let s = '<svg class="zg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + MT.esc(aria) + '">' +
+      '<defs>' +
+      '<marker id="' + id + 'a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,1 L9,5 L0,9 z" class="zg-spitze-achse"/></marker>' +
+      '<marker id="' + id + 'p" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="zg-spitze"/></marker>' +
+      '</defs>';
+
+    s += '<line x1="' + (P - 16) + '" y1="' + y + '" x2="' + (W - 4) + '" y2="' + y + '" class="zg-achse" marker-end="url(#' + id + 'a)"/>';
+
+    for (let x = min; x <= max; x++) {
+      const gross = x % beschr === 0;
+      const X = sx(x).toFixed(1);
+      const l = gross ? 8 : 5;
+      s += '<line x1="' + X + '" y1="' + (y - l) + '" x2="' + X + '" y2="' + (y + l) + '" class="zg-strich' + (gross ? ' gross' : '') + '"/>';
+      if (gross) s += '<text x="' + X + '" y="' + (y + 26) + '" class="zg-zahl">' + MT.z(x) + '</text>';
+    }
+
+    pfeile.forEach(function (p) {
+      const x1 = sx(p.von), x2 = sx(p.bis), yy = y - 9;
+      const h = Math.min(48, 16 + Math.abs(x2 - x1) * 0.2);
+      s += '<path d="M' + x1.toFixed(1) + ',' + yy + ' Q' + ((x1 + x2) / 2).toFixed(1) + ',' + (yy - 2 * h).toFixed(1) + ' ' + x2.toFixed(1) + ',' + yy + '" class="zg-pfeil" marker-end="url(#' + id + 'p)"/>';
+    });
+
+    punkte.forEach(function (p) {
+      const X = sx(p.x).toFixed(1);
+      const kl = p.art === 'b' ? ' b' : '';
+      s += '<circle cx="' + X + '" cy="' + y + '" r="6.5" class="zg-punkt' + kl + '"/>';
+      if (p.text) s += '<text x="' + X + '" y="' + (y + 48) + '" class="zg-marke' + kl + '">' + MT.esc(p.text) + '</text>';
+    });
+
+    return s + '</svg>';
+  };
+})(window.MT);
+</script>
+  <script>
+/* Lernstand im Browser (localStorage) sowie Export und Import als JSON-Datei. */
+(function (MT) {
+  'use strict';
+
+  const SCHLUESSEL = 'mathe-tool-fortschritt-v1';
+  MT.ZIEL = { anzahl: 10, richtig: 8 }; // 8 der letzten 10 Aufgaben im ersten Versuch richtig
+
+  let daten = null;
+  let speicherOk = true;
+
+  function leer() {
+    return { version: 1, themen: {} };
+  }
+
+  function ganzzahl(v) {
+    v = Number(v);
+    return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
+  }
+
+  /** Übernimmt nur bekannte Felder mit gültigen Werten (wichtig beim Import). */
+  function bereinigen(d) {
+    const out = leer();
+    if (!d || typeof d !== 'object' || !d.themen || typeof d.themen !== 'object') return out;
+    Object.keys(d.themen).forEach(function (id) {
+      if (!/^[a-z0-9-]{1,40}$/.test(id)) return;
+      const t = d.themen[id];
+      if (!t || typeof t !== 'object') return;
+      const neu = { einfuehrungGelesen: !!t.einfuehrungGelesen, stufen: {} };
+      ['1', '2', '3'].forEach(function (n) {
+        const s = t.stufen && t.stufen[n];
+        if (!s || typeof s !== 'object') return;
+        neu.stufen[n] = {
+          versuche: ganzzahl(s.versuche),
+          richtig: ganzzahl(s.richtig),
+          letzte: Array.isArray(s.letzte) ? s.letzte.slice(-MT.ZIEL.anzahl).map(function (v) { return v ? 1 : 0; }) : [],
+          abgeschlossen: !!s.abgeschlossen,
+          freigeschaltet: !!s.freigeschaltet
+        };
+      });
+      out.themen[id] = neu;
+    });
+    return out;
+  }
+
+  function laden() {
+    if (daten) return daten;
+    try {
+      const roh = window.localStorage.getItem(SCHLUESSEL);
+      daten = roh ? bereinigen(JSON.parse(roh)) : leer();
+    } catch (e) {
+      speicherOk = false;
+      daten = leer();
+    }
+    return daten;
+  }
+
+  function sichern() {
+    try {
+      window.localStorage.setItem(SCHLUESSEL, JSON.stringify(daten));
+      speicherOk = true;
+    } catch (e) {
+      speicherOk = false;
+    }
+  }
+
+  function thema(id) {
+    const d = laden();
+    if (!d.themen[id]) d.themen[id] = { einfuehrungGelesen: false, stufen: {} };
+    return d.themen[id];
+  }
+
+  function stufe(id, n) {
+    const t = thema(id);
+    if (!t.stufen[n]) t.stufen[n] = { versuche: 0, richtig: 0, letzte: [], abgeschlossen: false, freigeschaltet: false };
+    return t.stufen[n];
+  }
+
+  MT.speicher = {
+    stufe: stufe,
+
+    verfuegbar: function () {
+      laden();
+      return speicherOk;
+    },
+
+    einfuehrungGelesen: function (id) {
+      return !!thema(id).einfuehrungGelesen;
+    },
+
+    markiereEinfuehrung: function (id) {
+      thema(id).einfuehrungGelesen = true;
+      sichern();
+    },
+
+    stufeOffen: function (id, n) {
+      if (n === 1) return true;
+      return stufe(id, n - 1).abgeschlossen || stufe(id, n).freigeschaltet;
+    },
+
+    freischalten: function (id, n) {
+      stufe(id, n).freigeschaltet = true;
+      sichern();
+    },
+
+    /** Erfasst ein Ergebnis. Gibt true zurück, wenn die Stufe dadurch neu abgeschlossen wurde. */
+    erfassen: function (id, n, richtig) {
+      const s = stufe(id, n);
+      s.versuche++;
+      if (richtig) s.richtig++;
+      s.letzte.push(richtig ? 1 : 0);
+      if (s.letzte.length > MT.ZIEL.anzahl) s.letzte.shift();
+      let neu = false;
+      const summe = s.letzte.reduce(function (a, b) { return a + b; }, 0);
+      if (!s.abgeschlossen && s.letzte.length >= MT.ZIEL.anzahl && summe >= MT.ZIEL.richtig) {
+        s.abgeschlossen = true;
+        neu = true;
+      }
+      sichern();
+      return neu;
+    },
+
+    exportieren: function () {
+      const inhalt = Object.assign({ exportiert: new Date().toISOString() }, laden());
+      const blob = new Blob([JSON.stringify(inhalt, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'mathe-fortschritt-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    },
+
+    /** Wirft einen Fehler, wenn der Text kein gültiger Lernstand ist. */
+    importieren: function (text) {
+      const roh = JSON.parse(text);
+      if (!roh || roh.version !== 1 || typeof roh.themen !== 'object') {
+        throw new Error('Die Datei enthält keinen gültigen Lernstand.');
+      }
+      daten = bereinigen(roh);
+      sichern();
+    },
+
+    zuruecksetzen: function () {
+      daten = leer();
+      sichern();
+    }
+  };
+})(window.MT);
+</script>
+  <script>
+/* Thema: Ganze Zahlen (Lehrplan 21, MA.1 Zahl und Variable) */
+(function (MT) {
+  'use strict';
+
+  const rnd = MT.rnd, rndNZ = MT.rndNZ, pick = MT.pick, shuffle = MT.shuffle;
+  const z = MT.z, k = MT.k, term = MT.term, schritte = MT.schritte, zg = MT.zahlengerade;
+
+  const vorzeichenText = function (a, b) {
+    return (a < 0) === (b < 0)
+      ? 'gleiche Vorzeichen → Ergebnis positiv'
+      : 'verschiedene Vorzeichen → Ergebnis negativ';
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Einführung                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function widgetGerade(el) {
+    el.innerHTML =
+      '<label class="regler">Zahl wählen <input type="range" min="-10" max="10" value="-4" step="1"><output></output></label>' +
+      '<div class="bild"></div><p class="widget-text"></p>';
+    const r = el.querySelector('input'), o = el.querySelector('output');
+    const bild = el.querySelector('.bild'), text = el.querySelector('.widget-text');
+    function zeichnen() {
+      const x = Number(r.value);
+      o.textContent = z(x);
+      const punkte = [{ x: x, text: z(x) }];
+      if (x !== 0) punkte.push({ x: -x, text: z(-x), art: 'b' });
+      bild.innerHTML = zg({ min: -10, max: 10, beschriftung: 5, punkte: punkte });
+      text.innerHTML = x === 0
+        ? 'Die Zahl 0 ist weder positiv noch negativ. Ihr Betrag ist 0, ihre Gegenzahl ebenfalls 0.'
+        : 'Die Zahl <strong>' + z(x) + '</strong> ist ' + (x < 0 ? 'negativ' : 'positiv') + '. ' +
+          'Ihr Abstand zur 0 beträgt ' + Math.abs(x) + '. Das ist der <strong>Betrag</strong>: |' + z(x) + '| = ' + Math.abs(x) + '. ' +
+          'Die <strong>Gegenzahl</strong> ist <span class="farbe-b">' + z(-x) + '</span>. Sie ist gleich weit von 0 entfernt, liegt aber auf der anderen Seite.';
+    }
+    r.addEventListener('input', zeichnen);
+    zeichnen();
+  }
+
+  function widgetRechnen(el) {
+    el.innerHTML =
+      '<div class="regler-gruppe">' +
+      '<label class="regler">Startzahl <input type="range" min="-10" max="10" value="3" data-k="a"><output></output></label>' +
+      '<label class="regler">Rechenart <select data-k="op"><option value="+">+ addieren</option><option value="-">− subtrahieren</option></select></label>' +
+      '<label class="regler">Zweite Zahl <input type="range" min="-10" max="10" value="-5" data-k="b"><output></output></label>' +
+      '</div><div class="term gross"></div><div class="bild"></div><p class="widget-text"></p>';
+    const ea = el.querySelector('[data-k=a]'), eb = el.querySelector('[data-k=b]'), eop = el.querySelector('[data-k=op]');
+    const outs = el.querySelectorAll('output');
+    function zeichnen() {
+      const a = Number(ea.value), b = Number(eb.value), op = eop.value;
+      outs[0].textContent = z(a);
+      outs[1].textContent = z(b);
+      const d = op === '+' ? b : -b, erg = a + d;
+      el.querySelector('.term').innerHTML = op === '+'
+        ? z(a) + ' + ' + k(b) + ' = ' + z(erg)
+        : z(a) + ' − ' + k(b) + ' = ' + z(a) + ' + ' + k(-b) + ' = ' + z(erg);
+      el.querySelector('.bild').innerHTML = zg({
+        min: -20, max: 20, beschriftung: 5,
+        punkte: [{ x: a, text: z(a) }].concat(d !== 0 ? [{ x: erg, text: z(erg), art: 'b' }] : []),
+        pfeile: d !== 0 ? [{ von: a, bis: erg }] : []
+      });
+      let t = d === 0
+        ? 'Mit 0 verändert sich nichts.'
+        : 'Sie starten bei ' + z(a) + ' und gehen ' + Math.abs(d) + (Math.abs(d) === 1 ? ' Schritt' : ' Schritte') + ' nach ' + (d < 0 ? 'links' : 'rechts') + '.';
+      if (op === '-' && b !== 0) t += ' Das Subtrahieren von ' + k(b) + ' entspricht dem Addieren der Gegenzahl ' + k(-b) + '.';
+      el.querySelector('.widget-text').innerHTML = t;
+    }
+    [ea, eb, eop].forEach(function (e) { e.addEventListener('input', zeichnen); });
+    zeichnen();
+  }
+
+  const einfuehrung = [
+    {
+      titel: 'Wozu negative Zahlen?',
+      html:
+        '<p>Mit den natürlichen Zahlen 0, 1, 2, 3, … lassen sich viele Situationen nicht beschreiben. Dafür braucht es Zahlen unter null:</p>' +
+        '<ul class="beispiele">' +
+        '<li><strong>Temperatur:</strong> In einer Winternacht misst man −12 °C.</li>' +
+        '<li><strong>Kontostand:</strong> Ein Konto mit Fr. −250 ist um 250 Franken überzogen.</li>' +
+        '<li><strong>Höhe:</strong> Das Ufer des Toten Meeres liegt rund 430 m unter dem Meeresspiegel, also auf −430 m.</li>' +
+        '<li><strong>Stockwerk:</strong> Im Lift steht −2 für das zweite Untergeschoss.</li>' +
+        '</ul>' +
+        '<p>Die Zahlen …, −3, −2, −1, 0, 1, 2, 3, … heissen <strong>ganze Zahlen</strong>. Man bezeichnet sie mit dem Zeichen ℤ. ' +
+        'Positive Zahlen schreibt man meist ohne Vorzeichen: 5 bedeutet +5.</p>'
+    },
+    {
+      titel: 'Die Zahlengerade',
+      html:
+        '<p>Auf der Zahlengerade liegen die negativen Zahlen links von 0 und die positiven rechts davon. Es gilt: <strong>Je weiter rechts eine Zahl liegt, desto grösser ist sie.</strong></p>' +
+        '<p>Deshalb ist −8 kleiner als −3, obwohl 8 grösser ist als 3: −8 &lt; −3.</p>' +
+        '<dl class="begriffe">' +
+        '<dt>Betrag</dt><dd>Der Abstand einer Zahl zur 0. Er ist nie negativ: |−6| = 6 und |6| = 6.</dd>' +
+        '<dt>Gegenzahl</dt><dd>Die Zahl mit dem gleichen Betrag auf der anderen Seite der 0: Die Gegenzahl von −6 ist 6.</dd>' +
+        '</dl>' +
+        '<p class="klein">Verschieben Sie den Regler und beobachten Sie Betrag und Gegenzahl.</p>',
+      widget: widgetGerade
+    },
+    {
+      titel: 'Addieren und subtrahieren',
+      html:
+        '<p>Addieren und Subtrahieren lassen sich als Bewegung auf der Zahlengerade verstehen:</p>' +
+        '<ul>' +
+        '<li>Eine <strong>positive</strong> Zahl addieren: nach <strong>rechts</strong> gehen. &nbsp; −2 + 5 = 3</li>' +
+        '<li>Eine <strong>negative</strong> Zahl addieren: nach <strong>links</strong> gehen. &nbsp; 4 + (−6) = −2</li>' +
+        '<li>Eine Zahl <strong>subtrahieren</strong> heisst: ihre <strong>Gegenzahl addieren</strong>. &nbsp; 5 − (−3) = 5 + 3 = 8</li>' +
+        '</ul>' +
+        '<p>Daraus ergibt sich eine Kurzregel für zwei Zeichen nebeneinander:</p>' +
+        '<table class="tabelle"><thead><tr><th>Zeichen</th><th>wird zu</th><th>Beispiel</th></tr></thead><tbody>' +
+        '<tr><td>+ (+ …)</td><td>+</td><td>7 + (+2) = 7 + 2 = 9</td></tr>' +
+        '<tr><td>− (− …)</td><td>+</td><td>7 − (−2) = 7 + 2 = 9</td></tr>' +
+        '<tr><td>+ (− …)</td><td>−</td><td>7 + (−2) = 7 − 2 = 5</td></tr>' +
+        '<tr><td>− (+ …)</td><td>−</td><td>7 − (+2) = 7 − 2 = 5</td></tr>' +
+        '</tbody></table>' +
+        '<p class="klein">Probieren Sie verschiedene Rechnungen aus.</p>',
+      widget: widgetRechnen
+    },
+    {
+      titel: 'Multiplizieren und dividieren',
+      html:
+        '<p>Beim Multiplizieren und Dividieren rechnet man zuerst mit den Beträgen. Das Vorzeichen bestimmt man separat:</p>' +
+        '<table class="tabelle"><thead><tr><th>Vorzeichen</th><th>Ergebnis</th><th>Beispiel</th></tr></thead><tbody>' +
+        '<tr><td>gleich: (+)·(+) oder (−)·(−)</td><td>positiv</td><td>(−3) · (−4) = 12</td></tr>' +
+        '<tr><td>verschieden: (+)·(−) oder (−)·(+)</td><td>negativ</td><td>3 · (−4) = −12</td></tr>' +
+        '</tbody></table>' +
+        '<p>Für die Division gelten dieselben Regeln: (−12) : (−4) = 3 und (−12) : 4 = −3.</p>' +
+        '<p><strong>Warum ist „minus mal minus“ plus?</strong> Betrachten Sie die folgende Reihe:</p>' +
+        '<div class="muster">' +
+        '<span>3 · (−2) = −6</span><span>2 · (−2) = −4</span><span>1 · (−2) = −2</span><span>0 · (−2) = 0</span>' +
+        '<span class="hervor">(−1) · (−2) = 2</span><span class="hervor">(−2) · (−2) = 4</span>' +
+        '</div>' +
+        '<p>Mit jedem Schritt wird der erste Faktor um 1 kleiner und das Ergebnis um 2 grösser. Wenn man dieses Muster fortsetzt, ergibt sich ein positives Ergebnis.</p>' +
+        '<p>Auch bei ganzen Zahlen gilt: <strong>Punkt- vor Strichrechnung</strong>, und Klammern werden zuerst berechnet.</p>'
+    },
+    {
+      titel: 'Durchgerechnete Beispiele',
+      html:
+        '<details class="beispiel"><summary><span class="term inline">−7 + 12 − (−4)</span></summary>' +
+        schritte([
+          'Subtraktion als Addition der Gegenzahl schreiben: −7 + 12 + 4',
+          'Von links nach rechts: −7 + 12 = 5',
+          '5 + 4 = <strong>9</strong>'
+        ]) + '</details>' +
+        '<details class="beispiel"><summary><span class="term inline">(−3) · (−5) + (−20) : 4</span></summary>' +
+        schritte([
+          'Punkt vor Strich: (−3) · (−5) = 15 &nbsp;(gleiche Vorzeichen)',
+          '(−20) : 4 = −5 &nbsp;(verschiedene Vorzeichen)',
+          '15 + (−5) = 15 − 5 = <strong>10</strong>'
+        ]) + '</details>' +
+        '<details class="beispiel"><summary>Ein Kühlraum hat eine Temperatur von −18 °C. Nach einem Stromausfall steigt die Temperatur um 3 °C pro Stunde. Wie warm ist es nach 4 Stunden?</summary>' +
+        schritte([
+          'Änderung in 4 Stunden: 4 · 3 °C = 12 °C',
+          'Neue Temperatur: −18 + 12 = <strong>−6 °C</strong>'
+        ]) + '</details>'
+    },
+    {
+      titel: 'Das Wichtigste in Kürze',
+      html:
+        '<ul class="kurz">' +
+        '<li>Auf der Zahlengerade ist die Zahl weiter rechts die grössere.</li>' +
+        '<li>Der Betrag ist der Abstand zur 0. Die Gegenzahl hat denselben Betrag und das andere Vorzeichen.</li>' +
+        '<li>Positive Zahl addieren: nach rechts. Negative Zahl addieren: nach links.</li>' +
+        '<li>Subtrahieren heisst: die Gegenzahl addieren.</li>' +
+        '<li>Multiplizieren und Dividieren: Gleiche Vorzeichen ergeben ein positives Ergebnis, verschiedene Vorzeichen ein negatives.</li>' +
+        '<li>Punkt- vor Strichrechnung gilt weiterhin.</li>' +
+        '</ul>'
+    }
+  ];
+
+  /* ------------------------------------------------------------------ */
+  /* Stufe 1 – Grundlagen                                                */
+  /* ------------------------------------------------------------------ */
+
+  function vergleichen() {
+    const a = rnd(-15, 15);
+    let b;
+    do { b = rnd(-15, 15); } while (b === a || (a >= 0 && b >= 0));
+    const rel = a < b ? '<' : '>';
+    return {
+      typ: 'auswahl',
+      frage: 'Welches Zeichen gehört in die Lücke?' + term(z(a) + ' <span class="luecke">☐</span> ' + z(b)),
+      optionen: [{ wert: '<', text: '<  (kleiner als)' }, { wert: '>', text: '>  (grösser als)' }],
+      antwort: rel,
+      hinweis: 'Auf der Zahlengerade liegt die grössere Zahl weiter rechts.',
+      loesung:
+        '<p>' + z(a) + ' liegt auf der Zahlengerade ' + (a < b ? 'links' : 'rechts') + ' von ' + z(b) + '. Also gilt: <strong>' + z(a) + ' ' + MT.esc(rel) + ' ' + z(b) + '</strong></p>' +
+        zg({ min: -15, max: 15, beschriftung: 5, punkte: [{ x: a, text: z(a) }, { x: b, text: z(b), art: 'b' }] })
+    };
+  }
+
+  function ablesen() {
+    let x;
+    do { x = rndNZ(-10, 10); } while (x % 5 === 0);
+    return {
+      typ: 'zahl',
+      frage: 'Welche Zahl ist auf der Zahlengerade markiert?',
+      bild: zg({ min: -10, max: 10, beschriftung: 5, punkte: [{ x: x }] }),
+      antwort: x,
+      hinweis: 'Zählen Sie die Striche von der nächsten beschrifteten Zahl aus. Links von 0 liegen die negativen Zahlen.',
+      loesung: '<p>Der Punkt liegt ' + Math.abs(x) + ' Striche ' + (x < 0 ? 'links' : 'rechts') + ' von 0. Die markierte Zahl ist <strong>' + z(x) + '</strong>.</p>' +
+        zg({ min: -10, max: 10, beschriftung: 5, punkte: [{ x: x, text: z(x) }] })
+    };
+  }
+
+  function addSub() {
+    const op = pick(['+', '−']);
+    let a, b;
+    do { a = rndNZ(-15, 15); b = rndNZ(-15, 15); } while (a > 0 && b > 0);
+    const d = op === '+' ? b : -b, erg = a + d;
+    let hinweis;
+    if (op === '+') hinweis = b < 0 ? 'Eine negative Zahl addieren heisst: auf der Zahlengerade nach links gehen.' : 'Eine positive Zahl addieren heisst: auf der Zahlengerade nach rechts gehen.';
+    else hinweis = b < 0 ? 'Eine negative Zahl subtrahieren heisst: ihre Gegenzahl addieren. Aus − (−' + Math.abs(b) + ') wird + ' + Math.abs(b) + '.' : 'Eine positive Zahl subtrahieren heisst: auf der Zahlengerade nach links gehen.';
+    const st = [];
+    if (op === '−') st.push('Subtraktion als Addition der Gegenzahl schreiben: ' + z(a) + ' + ' + k(d));
+    st.push('Start bei ' + z(a) + ', dann ' + Math.abs(d) + ' Schritte nach ' + (d < 0 ? 'links' : 'rechts') + '.');
+    st.push('Ergebnis: <strong>' + z(erg) + '</strong>');
+    return {
+      typ: 'zahl',
+      frage: 'Berechnen Sie.' + term(z(a) + ' ' + op + ' ' + k(b)),
+      antwort: erg,
+      hinweis: hinweis,
+      loesung: schritte(st) + zg({ min: -30, max: 30, beschriftung: 10, punkte: [{ x: a, text: z(a) }, { x: erg, text: z(erg), art: 'b' }], pfeile: [{ von: a, bis: erg }] })
+    };
+  }
+
+  function betragGegenzahl() {
+    const v = pick(['gegen', 'betrag', 'kleiner', 'groesser']);
+    if (v === 'gegen') {
+      const x = rndNZ(-20, 20);
+      return {
+        typ: 'zahl',
+        frage: 'Wie lautet die Gegenzahl von ' + z(x) + '?',
+        antwort: -x,
+        hinweis: 'Die Gegenzahl liegt gleich weit von 0 entfernt, aber auf der anderen Seite.',
+        loesung: '<p>Die Gegenzahl hat denselben Betrag und das andere Vorzeichen: <strong>' + z(-x) + '</strong>.</p>'
+      };
+    }
+    if (v === 'betrag') {
+      const x = rnd(-25, -1);
+      return {
+        typ: 'zahl',
+        frage: 'Berechnen Sie den Betrag.' + term('|' + z(x) + '|'),
+        antwort: -x,
+        hinweis: 'Der Betrag ist der Abstand zur 0. Ein Abstand ist nie negativ.',
+        loesung: '<p>' + z(x) + ' ist ' + (-x) + ' Einheiten von 0 entfernt. Also gilt |' + z(x) + '| = <strong>' + (-x) + '</strong>.</p>'
+      };
+    }
+    if (v === 'kleiner') {
+      const x = rnd(-10, 6), n = rnd(3, 12);
+      return {
+        typ: 'zahl',
+        frage: 'Welche Zahl ist um ' + n + ' kleiner als ' + z(x) + '?',
+        antwort: x - n,
+        hinweis: '„Kleiner“ bedeutet: auf der Zahlengerade nach links gehen.',
+        loesung: schritte([z(x) + ' − ' + n + ' = <strong>' + z(x - n) + '</strong>']) +
+          zg({ min: -25, max: 10, beschriftung: 5, punkte: [{ x: x, text: z(x) }, { x: x - n, text: z(x - n), art: 'b' }], pfeile: [{ von: x, bis: x - n }] })
+      };
+    }
+    const x = rnd(-20, -3), n = rnd(2, 15);
+    return {
+      typ: 'zahl',
+      frage: 'Welche Zahl ist um ' + n + ' grösser als ' + z(x) + '?',
+      antwort: x + n,
+      hinweis: '„Grösser“ bedeutet: auf der Zahlengerade nach rechts gehen.',
+      loesung: schritte([z(x) + ' + ' + n + ' = <strong>' + z(x + n) + '</strong>']) +
+        zg({ min: -20, max: 15, beschriftung: 5, punkte: [{ x: x, text: z(x) }, { x: x + n, text: z(x + n), art: 'b' }], pfeile: [{ von: x, bis: x + n }] })
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Stufe 2 – Anwenden                                                  */
+  /* ------------------------------------------------------------------ */
+
+  function multDiv() {
+    const op = pick(['·', ':']);
+    let a = rndNZ(-12, 12), b = rndNZ(-12, 12);
+    if (a > 0 && b > 0) { if (Math.random() < 0.5) a = -a; else b = -b; }
+    if (op === '·') {
+      const erg = a * b;
+      return {
+        typ: 'zahl',
+        frage: 'Berechnen Sie.' + term(z(a) + ' · ' + k(b)),
+        antwort: erg,
+        hinweis: 'Gleiche Vorzeichen ergeben ein positives Ergebnis, verschiedene Vorzeichen ein negatives.',
+        loesung: schritte([
+          'Vorzeichen: ' + vorzeichenText(a, b),
+          'Beträge multiplizieren: ' + Math.abs(a) + ' · ' + Math.abs(b) + ' = ' + Math.abs(erg),
+          'Ergebnis: <strong>' + z(erg) + '</strong>'
+        ])
+      };
+    }
+    const p = a * b;
+    return {
+      typ: 'zahl',
+      frage: 'Berechnen Sie.' + term(z(p) + ' : ' + k(b)),
+      antwort: a,
+      hinweis: 'Gleiche Vorzeichen ergeben ein positives Ergebnis, verschiedene Vorzeichen ein negatives.',
+      loesung: schritte([
+        'Vorzeichen: ' + vorzeichenText(p, b),
+        'Beträge dividieren: ' + Math.abs(p) + ' : ' + Math.abs(b) + ' = ' + Math.abs(a),
+        'Ergebnis: <strong>' + z(a) + '</strong>'
+      ])
+    };
+  }
+
+  function dreiGlieder() {
+    let a, b, c, o1, o2;
+    do {
+      a = rndNZ(-20, 20); b = rndNZ(-15, 15); c = rndNZ(-15, 15);
+      o1 = pick(['+', '−']); o2 = pick(['+', '−']);
+    } while ([a, b, c].filter(function (x) { return x < 0; }).length < 2);
+    const b2 = o1 === '+' ? b : -b, c2 = o2 === '+' ? c : -c;
+    const r1 = a + b2, erg = r1 + c2;
+    const st = [];
+    if (o1 === '−' || o2 === '−') st.push('Subtraktionen als Addition der Gegenzahl schreiben: ' + z(a) + ' + ' + k(b2) + ' + ' + k(c2));
+    st.push('Von links nach rechts: ' + z(a) + ' + ' + k(b2) + ' = ' + z(r1));
+    st.push(z(r1) + ' + ' + k(c2) + ' = <strong>' + z(erg) + '</strong>');
+    return {
+      typ: 'zahl',
+      frage: 'Berechnen Sie.' + term(z(a) + ' ' + o1 + ' ' + k(b) + ' ' + o2 + ' ' + k(c)),
+      antwort: erg,
+      hinweis: 'Schreiben Sie jede Subtraktion als Addition der Gegenzahl. Rechnen Sie dann von links nach rechts.',
+      loesung: schritte(st)
+    };
+  }
+
+  function punktVorStrich() {
+    const op = pick(['+', '−']);
+    const a = rndNZ(-20, 20);
+    let b, c;
+    do { b = rndNZ(-9, 9); c = rndNZ(-9, 9); } while ((b > 0 && c > 0) || Math.abs(b) === 1 || Math.abs(c) === 1);
+    if (Math.random() < 0.5) {
+      const prod = b * c, erg = op === '+' ? a + prod : a - prod;
+      return {
+        typ: 'zahl',
+        frage: 'Berechnen Sie.' + term(z(a) + ' ' + op + ' ' + k(b) + ' · ' + k(c)),
+        antwort: erg,
+        hinweis: 'Punkt- vor Strichrechnung: Berechnen Sie zuerst das Produkt.',
+        loesung: schritte([
+          'Zuerst multiplizieren: ' + k(b) + ' · ' + k(c) + ' = ' + z(prod),
+          'Dann: ' + z(a) + ' ' + op + ' ' + k(prod) + ' = <strong>' + z(erg) + '</strong>'
+        ])
+      };
+    }
+    const p = b * c, erg = op === '+' ? a + b : a - b;
+    return {
+      typ: 'zahl',
+      frage: 'Berechnen Sie.' + term(z(a) + ' ' + op + ' ' + k(p) + ' : ' + k(c)),
+      antwort: erg,
+      hinweis: 'Punkt- vor Strichrechnung: Berechnen Sie zuerst den Quotienten.',
+      loesung: schritte([
+        'Zuerst dividieren: ' + k(p) + ' : ' + k(c) + ' = ' + z(b),
+        'Dann: ' + z(a) + ' ' + op + ' ' + k(b) + ' = <strong>' + z(erg) + '</strong>'
+      ])
+    };
+  }
+
+  function ordnen() {
+    let zahlen;
+    do {
+      zahlen = [];
+      while (zahlen.length < 4) {
+        const x = rnd(-30, 30);
+        if (zahlen.indexOf(x) === -1) zahlen.push(x);
+      }
+    } while (zahlen.filter(function (x) { return x < 0; }).length < 2);
+    const kleinste = pick([true, false]);
+    const sortiert = zahlen.slice().sort(function (a, b) { return a - b; });
+    const ziel = kleinste ? sortiert[0] : sortiert[3];
+    return {
+      typ: 'auswahl',
+      frage: 'Welche Zahl ist am ' + (kleinste ? 'kleinsten' : 'grössten') + '?',
+      optionen: shuffle(zahlen).map(function (x) { return { wert: String(x), text: z(x) }; }),
+      antwort: String(ziel),
+      hinweis: kleinste ? 'Die kleinste Zahl liegt auf der Zahlengerade ganz links.' : 'Die grösste Zahl liegt auf der Zahlengerade ganz rechts.',
+      loesung: '<p>Geordnet: ' + sortiert.map(z).join(' &lt; ') + '</p><p>Die ' + (kleinste ? 'kleinste' : 'grösste') + ' Zahl ist <strong>' + z(ziel) + '</strong>.</p>'
+    };
+  }
+
+  function abstand() {
+    let a, b;
+    do { a = rnd(-25, 15); b = rnd(-25, 15); } while (a === b || (a >= 0 && b >= 0));
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    return {
+      typ: 'zahl',
+      frage: 'Wie gross ist der Abstand zwischen ' + z(a) + ' und ' + z(b) + ' auf der Zahlengerade?',
+      antwort: hi - lo,
+      hinweis: 'Rechnen Sie: grössere Zahl minus kleinere Zahl.',
+      loesung: schritte([z(hi) + ' − ' + k(lo) + ' = ' + z(hi) + ' + ' + k(-lo) + ' = <strong>' + (hi - lo) + '</strong>']) +
+        zg({ min: -25, max: 15, beschriftung: 5, punkte: [{ x: lo, text: z(lo) }, { x: hi, text: z(hi), art: 'b' }], pfeile: [{ von: lo, bis: hi }] })
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Stufe 3 – Vertiefen                                                 */
+  /* ------------------------------------------------------------------ */
+
+  function temperatur() {
+    let t0, r, h;
+    do { t0 = rnd(2, 9); r = rnd(2, 4); h = rnd(3, 6); } while (t0 - r * h >= 0);
+    const t1 = t0 - r * h;
+    if (Math.random() < 0.5) {
+      return {
+        typ: 'zahl', einheit: '°C',
+        frage: '<p>Um 18 Uhr zeigt das Thermometer ' + t0 + ' °C. Danach sinkt die Temperatur gleichmässig und erreicht nach ' + h + ' Stunden ' + z(t1) + ' °C.</p><p>Um wie viele Grad sinkt die Temperatur pro Stunde?</p>',
+        antwort: r,
+        hinweis: 'Berechnen Sie zuerst die gesamte Veränderung. Teilen Sie diese dann durch die Anzahl Stunden.',
+        loesung: schritte([
+          'Gesamte Veränderung: ' + z(t1) + ' − ' + t0 + ' = ' + z(t1 - t0) + ' °C',
+          'Pro Stunde: ' + k(t1 - t0) + ' : ' + h + ' = ' + z(-r) + ' °C',
+          'Die Temperatur sinkt um <strong>' + r + ' °C</strong> pro Stunde.'
+        ])
+      };
+    }
+    return {
+      typ: 'zahl', einheit: '°C',
+      frage: '<p>Um 18 Uhr zeigt das Thermometer ' + t0 + ' °C. Die Temperatur sinkt pro Stunde gleichmässig um ' + r + ' °C.</p><p>Welche Temperatur zeigt das Thermometer nach ' + h + ' Stunden?</p>',
+      antwort: t1,
+      hinweis: 'Berechnen Sie zuerst, um wie viel die Temperatur insgesamt sinkt.',
+      loesung: schritte([
+        'Gesamte Abnahme: ' + h + ' · ' + r + ' °C = ' + (h * r) + ' °C',
+        'Neue Temperatur: ' + t0 + ' − ' + (h * r) + ' = <strong>' + z(t1) + ' °C</strong>'
+      ])
+    };
+  }
+
+  function konto() {
+    const start = -rnd(5, 30) * 10, ein = rnd(15, 40) * 10, n = rnd(2, 4), betr = rnd(4, 9) * 10;
+    const r1 = start + ein, end = r1 - n * betr;
+    return {
+      typ: 'zahl', einheit: 'Fr.',
+      frage: '<p>Ein Konto weist einen Stand von Fr. ' + z(start) + ' auf. Es werden Fr. ' + ein + ' eingezahlt. Danach werden ' + n + ' Rechnungen zu je Fr. ' + betr + ' abgebucht.</p><p>Wie hoch ist der Kontostand danach?</p>',
+      antwort: end,
+      hinweis: 'Einzahlungen werden addiert, Abbuchungen subtrahiert. Berechnen Sie zuerst den Gesamtbetrag der Rechnungen.',
+      loesung: schritte([
+        'Nach der Einzahlung: ' + z(start) + ' + ' + ein + ' = ' + z(r1),
+        'Rechnungen: ' + n + ' · ' + betr + ' = ' + (n * betr),
+        'Neuer Stand: ' + z(r1) + ' − ' + (n * betr) + ' = <strong>Fr. ' + z(end) + '</strong>'
+      ])
+    };
+  }
+
+  function hoehe() {
+    if (Math.random() < 0.5) {
+      const d = rnd(8, 40) * 10, h = rnd(10, 60) * 10;
+      return {
+        typ: 'zahl', einheit: 'm',
+        frage: '<p>Ein U-Boot befindet sich ' + d + ' m unter dem Meeresspiegel. Ein Helikopter fliegt genau darüber in ' + h + ' m Höhe.</p><p>Wie gross ist der Höhenunterschied zwischen den beiden?</p>',
+        antwort: h + d,
+        hinweis: 'Das U-Boot befindet sich auf −' + d + ' m. Rechnen Sie: obere Höhe minus untere Höhe.',
+        loesung: schritte([
+          'Positionen: Helikopter ' + h + ' m, U-Boot ' + z(-d) + ' m',
+          h + ' − ' + k(-d) + ' = ' + h + ' + ' + d + ' = <strong>' + (h + d) + ' m</strong>'
+        ])
+      };
+    }
+    let a, b, c;
+    do { a = rnd(5, 25); b = rnd(3, 15); c = rnd(5, 25); } while (c >= a + b);
+    const erg = -a - b + c;
+    return {
+      typ: 'zahl', einheit: 'm',
+      frage: '<p>Eine Taucherin befindet sich auf ' + z(-a) + ' m. Sie taucht zuerst ' + b + ' m tiefer und steigt dann ' + c + ' m auf.</p><p>Auf welcher Höhe (bezogen auf den Meeresspiegel) befindet sie sich danach?</p>',
+      antwort: erg,
+      hinweis: 'Tiefer tauchen bedeutet subtrahieren, aufsteigen bedeutet addieren.',
+      loesung: schritte([
+        z(-a) + ' − ' + b + ' = ' + z(-a - b),
+        z(-a - b) + ' + ' + c + ' = <strong>' + z(erg) + ' m</strong>'
+      ])
+    };
+  }
+
+  function umkehr() {
+    const f = pick(['plus', 'minus', 'mal', 'durch']);
+    const box = '<span class="luecke">☐</span>';
+    const x = rndNZ(-12, 12);
+    let b, c, anzeige, st;
+    if (f === 'plus') {
+      do { b = rndNZ(-15, 15); } while (x > 0 && b > 0);
+      c = x + b;
+      anzeige = box + ' + ' + k(b) + ' = ' + z(c);
+      st = ['☐ = ' + z(c) + ' − ' + k(b) + ' = <strong>' + z(x) + '</strong>', 'Probe: ' + z(x) + ' + ' + k(b) + ' = ' + z(c) + ' ✓'];
+    } else if (f === 'minus') {
+      do { b = rndNZ(-15, 15); } while (x > 0 && b > 0);
+      c = x - b;
+      anzeige = box + ' − ' + k(b) + ' = ' + z(c);
+      st = ['☐ = ' + z(c) + ' + ' + k(b) + ' = <strong>' + z(x) + '</strong>', 'Probe: ' + z(x) + ' − ' + k(b) + ' = ' + z(c) + ' ✓'];
+    } else if (f === 'mal') {
+      do { b = rndNZ(-9, 9); } while (Math.abs(b) === 1 || (x > 0 && b > 0));
+      c = b * x;
+      anzeige = z(b) + ' · ' + box + ' = ' + z(c);
+      st = ['☐ = ' + z(c) + ' : ' + k(b) + ' = <strong>' + z(x) + '</strong>', 'Probe: ' + z(b) + ' · ' + k(x) + ' = ' + z(c) + ' ✓'];
+    } else {
+      // Hier ist das Ergebnis c vorgegeben und ☐ = c · b.
+      do { b = rndNZ(-9, 9); c = rndNZ(-10, 10); } while (Math.abs(b) === 1 || (b > 0 && c > 0));
+      const y = c * b;
+      return {
+        typ: 'zahl',
+        frage: 'Welche Zahl gehört in das Kästchen?' + term(box + ' : ' + k(b) + ' = ' + z(c)),
+        antwort: y,
+        hinweis: 'Die Umkehrung der Division ist die Multiplikation.',
+        loesung: schritte(['☐ = ' + z(c) + ' · ' + k(b) + ' = <strong>' + z(y) + '</strong>', 'Probe: ' + z(y) + ' : ' + k(b) + ' = ' + z(c) + ' ✓'])
+      };
+    }
+    return {
+      typ: 'zahl',
+      frage: 'Welche Zahl gehört in das Kästchen?' + term(anzeige),
+      antwort: x,
+      hinweis: 'Machen Sie die Rechnung rückgängig: Addition ↔ Subtraktion, Multiplikation ↔ Division.',
+      loesung: schritte(st)
+    };
+  }
+
+  const AUSSAGEN = [
+    { t: 'Das Produkt zweier negativer Zahlen ist positiv.', w: true, e: 'Gleiche Vorzeichen ergeben ein positives Ergebnis, z. B. (−3) · (−5) = 15.' },
+    { t: 'Die Summe zweier negativer Zahlen ist immer negativ.', w: true, e: 'Von einer negativen Zahl aus geht man noch weiter nach links, z. B. (−4) + (−6) = −10.' },
+    { t: 'Die Differenz zweier negativer Zahlen ist immer negativ.', w: false, e: 'Gegenbeispiel: (−2) − (−5) = −2 + 5 = 3.' },
+    { t: 'Das Produkt von drei negativen Zahlen ist negativ.', w: true, e: '(−2) · (−3) = 6 und 6 · (−4) = −24. Bei einer ungeraden Anzahl negativer Faktoren ist das Produkt negativ.' },
+    { t: 'Der Betrag einer Zahl ist nie negativ.', w: true, e: 'Der Betrag ist ein Abstand zur 0, und ein Abstand ist nie negativ.' },
+    { t: 'Eine Zahl und ihre Gegenzahl ergeben zusammen immer 0.', w: true, e: 'Zum Beispiel (−7) + 7 = 0.' },
+    { t: 'Wenn man eine negative Zahl subtrahiert, wird das Ergebnis kleiner als die Ausgangszahl.', w: false, e: 'Das Ergebnis wird grösser: 4 − (−3) = 4 + 3 = 7.' },
+    { t: '−10 ist grösser als −3, weil 10 grösser als 3 ist.', w: false, e: '−10 liegt auf der Zahlengerade links von −3. Also gilt −10 < −3.' },
+    { t: 'Das Quadrat einer negativen Zahl ist positiv.', w: true, e: '(−4)² = (−4) · (−4) = 16.' },
+    { t: 'Der Quotient aus einer positiven und einer negativen Zahl ist negativ.', w: true, e: 'Verschiedene Vorzeichen ergeben ein negatives Ergebnis, z. B. 18 : (−6) = −3.' },
+    { t: 'Jede negative Zahl ist kleiner als jede positive Zahl.', w: true, e: 'Negative Zahlen liegen links von 0, positive rechts davon.' },
+    { t: 'Die Gegenzahl einer Zahl ist immer negativ.', w: false, e: 'Die Gegenzahl von −6 ist 6, also positiv.' }
+  ];
+
+  function aussage() {
+    const a = pick(AUSSAGEN);
+    return {
+      typ: 'auswahl',
+      frage: 'Ist die folgende Aussage wahr oder falsch?<blockquote>' + MT.esc(a.t) + '</blockquote>',
+      optionen: [{ wert: 'w', text: 'wahr' }, { wert: 'f', text: 'falsch' }],
+      antwort: a.w ? 'w' : 'f',
+      hinweis: 'Überprüfen Sie die Aussage an einem konkreten Zahlenbeispiel.',
+      loesung: '<p>Die Aussage ist <strong>' + (a.w ? 'wahr' : 'falsch') + '</strong>. ' + MT.esc(a.e) + '</p>'
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  MT.themen.push({
+    id: 'ganze-zahlen',
+    titel: 'Ganze Zahlen',
+    lehrplan: 'MA.1 Zahl und Variable',
+    kurz: 'Negative Zahlen verstehen, ordnen und mit ihnen rechnen: von der Zahlengerade bis zu Textaufgaben.',
+    verfuegbar: true,
+    einfuehrung: einfuehrung,
+    stufen: {
+      1: {
+        titel: 'Grundlagen',
+        beschreibung: 'Zahlen vergleichen und ablesen, Betrag und Gegenzahl, einfache Additionen und Subtraktionen.',
+        generatoren: [vergleichen, ablesen, addSub, addSub, betragGegenzahl]
+      },
+      2: {
+        titel: 'Anwenden',
+        beschreibung: 'Multiplizieren und dividieren, Rechnungen mit mehreren Schritten, Punkt vor Strich, Zahlen ordnen.',
+        generatoren: [multDiv, multDiv, dreiGlieder, punktVorStrich, ordnen, abstand]
+      },
+      3: {
+        titel: 'Vertiefen',
+        beschreibung: 'Textaufgaben aus dem Alltag, fehlende Zahlen bestimmen und Aussagen beurteilen.',
+        generatoren: [temperatur, konto, hoehe, umkehr, umkehr, aussage]
+      }
+    }
+  });
+})(window.MT);
+</script>
+  <script>
+/* Geplante Themen. Sobald ein Thema umgesetzt ist, erhält es eine eigene Datei nach dem Muster von ganze-zahlen.js. */
+(function (MT) {
+  'use strict';
+
+  MT.themen.push({
+    id: 'proportionalitaet',
+    titel: 'Proportionalität und Dreisatz',
+    lehrplan: 'MA.3 Grössen, Funktionen, Daten und Zufall',
+    kurz: 'Proportionale Zuordnungen erkennen, Wertetabellen ergänzen und Aufgaben mit dem Dreisatz lösen.',
+    verfuegbar: false
+  });
+
+  MT.themen.push({
+    id: 'winkel',
+    titel: 'Winkel an Geraden und im Dreieck',
+    lehrplan: 'MA.2 Form und Raum',
+    kurz: 'Winkel messen und benennen, Neben- und Scheitelwinkel, Winkelsumme im Dreieck.',
+    verfuegbar: false
+  });
+})(window.MT);
+</script>
+  <script>
+/* Navigation (über den Hash in der Adresse), Ansichten und Ablauf der Übungen. */
+(function (MT) {
+  'use strict';
+
+  const app = document.getElementById('app');
+  const esc = MT.esc, z = MT.z;
+
+  function thema(id) {
+    return MT.themen.find(function (t) { return t.id === id; });
+  }
+
+  function pfad(teile) {
+    return '<nav class="pfad" aria-label="Navigation">' + teile.join(' <span aria-hidden="true">›</span> ') + '</nav>';
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Routing                                                           */
+  /* ---------------------------------------------------------------- */
+
+  function route() {
+    const h = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    window.scrollTo(0, 0);
+    const t = h[0] === 'thema' ? thema(h[1]) : null;
+    if (t && t.verfuegbar) {
+      if (h[2] === 'einfuehrung') return zeigeEinfuehrung(t);
+      if (h[2] === 'stufe' && ['1', '2', '3'].indexOf(h[3]) !== -1) {
+        const n = Number(h[3]);
+        if (MT.speicher.stufeOffen(t.id, n)) return zeigeUebung(t, n);
+      }
+      return zeigeThema(t);
+    }
+    zeigeStart();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Startseite                                                        */
+  /* ---------------------------------------------------------------- */
+
+  function fortschrittsLeiste(t) {
+    const teile = ['<span class="pille' + (MT.speicher.einfuehrungGelesen(t.id) ? ' fertig' : '') + '">Einführung</span>'];
+    [1, 2, 3].forEach(function (n) {
+      const s = MT.speicher.stufe(t.id, n);
+      const kl = s.abgeschlossen ? ' fertig' : (s.versuche > 0 ? ' begonnen' : '');
+      teile.push('<span class="pille' + kl + '">Stufe ' + n + '</span>');
+    });
+    return '<div class="pillen" aria-label="Fortschritt">' + teile.join('') + '</div>';
+  }
+
+  function zeigeStart() {
+    let html =
+      '<h1>Mathematik 1. Sek</h1>' +
+      '<p class="lead">Übungen zu drei Themen der 1. Sekundarstufe nach Lehrplan 21. Jedes Thema beginnt mit einer Einführung. Danach üben Sie in drei Stufen: Grundlagen, Anwenden, Vertiefen.</p>';
+
+    if (!MT.speicher.verfuegbar()) {
+      html += '<div class="rm hinweis">Ihr Browser erlaubt derzeit keine Speicherung (z. B. im privaten Modus). Sie können üben, der Fortschritt geht beim Schliessen aber verloren.</div>';
+    }
+
+    html += '<div class="themen">';
+    MT.themen.forEach(function (t) {
+      if (t.verfuegbar) {
+        html +=
+          '<a class="karte thema-karte" href="#/thema/' + t.id + '">' +
+          '<span class="etikett">' + esc(t.lehrplan) + '</span>' +
+          '<h2>' + esc(t.titel) + '</h2><p>' + esc(t.kurz) + '</p>' + fortschrittsLeiste(t) + '</a>';
+      } else {
+        html +=
+          '<div class="karte thema-karte gesperrt" aria-disabled="true">' +
+          '<span class="etikett">' + esc(t.lehrplan) + '</span>' +
+          '<h2>' + esc(t.titel) + '</h2><p>' + esc(t.kurz) + '</p><p class="status">In Vorbereitung</p></div>';
+      }
+    });
+    html += '</div>';
+
+    html +=
+      '<section class="karte sicherung">' +
+      '<h2>Ihr Fortschritt</h2>' +
+      '<p>Der Fortschritt wird automatisch in diesem Browser gespeichert. Auf einem anderen Gerät oder in einem anderen Browser ist er nicht verfügbar. ' +
+      'Mit einer Sicherungsdatei können Sie ihn übertragen.</p>' +
+      '<div class="knopf-reihe">' +
+      '<button type="button" class="knopf" id="export">Fortschritt exportieren</button>' +
+      '<label class="knopf">Fortschritt importieren<input type="file" id="import" accept=".json,application/json" hidden></label>' +
+      '<button type="button" class="knopf leise" id="reset">Zurücksetzen</button>' +
+      '</div><div id="sicherung-meldung" aria-live="polite"></div></section>';
+
+    app.innerHTML = html;
+
+    const meldung = document.getElementById('sicherung-meldung');
+    document.getElementById('export').addEventListener('click', function () {
+      MT.speicher.exportieren();
+    });
+    document.getElementById('import').addEventListener('change', function (e) {
+      const datei = e.target.files && e.target.files[0];
+      if (!datei) return;
+      const leser = new FileReader();
+      leser.onload = function () {
+        try {
+          MT.speicher.importieren(String(leser.result));
+          zeigeStart();
+          document.getElementById('sicherung-meldung').innerHTML = '<div class="rm gut">Der Fortschritt wurde importiert.</div>';
+        } catch (err) {
+          meldung.innerHTML = '<div class="rm fehler">Die Datei konnte nicht gelesen werden. Bitte wählen Sie eine Sicherungsdatei, die mit diesem Tool exportiert wurde.</div>';
+        }
+      };
+      leser.readAsText(datei);
+    });
+    document.getElementById('reset').addEventListener('click', function () {
+      if (window.confirm('Möchten Sie den gesamten Fortschritt in diesem Browser löschen? Dies lässt sich nicht rückgängig machen.')) {
+        MT.speicher.zuruecksetzen();
+        zeigeStart();
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Themenseite                                                       */
+  /* ---------------------------------------------------------------- */
+
+  function zeigeThema(t) {
+    const gelesen = MT.speicher.einfuehrungGelesen(t.id);
+    let html =
+      pfad(['<a href="#/">Übersicht</a>', esc(t.titel)]) +
+      '<span class="etikett">' + esc(t.lehrplan) + '</span>' +
+      '<h1>' + esc(t.titel) + '</h1><p class="lead">' + esc(t.kurz) + '</p>' +
+      '<div class="stufen">' +
+      '<div class="karte stufe-karte">' +
+      '<div><h2>Einführung</h2><p>Erklärungen, interaktive Darstellungen und durchgerechnete Beispiele.</p>' +
+      '<p class="status' + (gelesen ? ' fertig' : '') + '">' + (gelesen ? 'Gelesen' : 'Noch nicht gelesen') + '</p></div>' +
+      '<a class="knopf' + (gelesen ? '' : ' primaer') + '" href="#/thema/' + t.id + '/einfuehrung">Einführung öffnen</a></div>';
+
+    [1, 2, 3].forEach(function (n) {
+      const cfg = t.stufen[n], s = MT.speicher.stufe(t.id, n), offen = MT.speicher.stufeOffen(t.id, n);
+      let status;
+      if (s.abgeschlossen) status = '<p class="status fertig">Abgeschlossen · ' + s.versuche + ' Aufgaben bearbeitet</p>';
+      else if (!offen) status = '<p class="status">Wird freigeschaltet, sobald Stufe ' + (n - 1) + ' abgeschlossen ist.</p>';
+      else if (s.versuche > 0) status = '<p class="status begonnen">In Arbeit · ' + s.versuche + ' Aufgaben bearbeitet</p>';
+      else status = '<p class="status">Bereit</p>';
+
+      html +=
+        '<div class="karte stufe-karte' + (offen ? '' : ' gesperrt') + '">' +
+        '<div><h2>Stufe ' + n + ': ' + esc(cfg.titel) + '</h2><p>' + esc(cfg.beschreibung) + '</p>' + status + '</div>' +
+        (offen
+          ? '<a class="knopf primaer" href="#/thema/' + t.id + '/stufe/' + n + '">' + (s.versuche ? 'Weiter üben' : 'Üben') + '</a>'
+          : '<button type="button" class="knopf leise" data-freischalten="' + n + '">Trotzdem öffnen</button>') +
+        '</div>';
+    });
+
+    html += '</div><p class="klein">Eine Stufe gilt als abgeschlossen, wenn Sie von den letzten ' + MT.ZIEL.anzahl + ' Aufgaben mindestens ' + MT.ZIEL.richtig + ' im ersten Versuch richtig gelöst haben.</p>';
+    app.innerHTML = html;
+
+    app.querySelectorAll('[data-freischalten]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const n = Number(b.getAttribute('data-freischalten'));
+        if (window.confirm('Stufe ' + n + ' ist noch gesperrt. Möchten Sie sie trotzdem öffnen?')) {
+          MT.speicher.freischalten(t.id, n);
+          location.hash = '#/thema/' + t.id + '/stufe/' + n;
+        }
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Einführung                                                        */
+  /* ---------------------------------------------------------------- */
+
+  function zeigeEinfuehrung(t) {
+    const abschnitte = t.einfuehrung;
+    let html =
+      pfad(['<a href="#/">Übersicht</a>', '<a href="#/thema/' + t.id + '">' + esc(t.titel) + '</a>', 'Einführung']) +
+      '<h1>' + esc(t.titel) + ': Einführung</h1>' +
+      '<nav class="karte inhalt" aria-label="Inhalt"><h2>Inhalt</h2><ol>' +
+      abschnitte.map(function (a, i) { return '<li><button type="button" class="link" data-ziel="' + i + '">' + esc(a.titel) + '</button></li>'; }).join('') +
+      '</ol></nav>';
+
+    abschnitte.forEach(function (a, i) {
+      html += '<section class="karte abschnitt" id="abschnitt-' + i + '"><h2>' + (i + 1) + '. ' + esc(a.titel) + '</h2>' + a.html +
+        (a.widget ? '<div class="widget" data-widget="' + i + '"></div>' : '') + '</section>';
+    });
+
+    html += '<div class="ende"><button type="button" class="knopf primaer" id="fertig">Einführung abschliessen und mit Stufe 1 beginnen</button></div>';
+    app.innerHTML = html;
+
+    abschnitte.forEach(function (a, i) {
+      if (a.widget) a.widget(app.querySelector('[data-widget="' + i + '"]'));
+    });
+    app.querySelectorAll('[data-ziel]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.getElementById('abschnitt-' + b.getAttribute('data-ziel')).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+    document.getElementById('fertig').addEventListener('click', function () {
+      MT.speicher.markiereEinfuehrung(t.id);
+      location.hash = '#/thema/' + t.id + '/stufe/1';
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Übung                                                             */
+  /* ---------------------------------------------------------------- */
+
+  /** Liest eine ganze Zahl; akzeptiert auch −, –, Leerzeichen und Klammern. Gibt null bei ungültiger Eingabe. */
+  function leseZahl(s) {
+    s = String(s).trim().replace(/[−–—]/g, '-').replace(/\s+/g, '').replace(/^\((.*)\)$/, '$1').replace(/^\+/, '');
+    if (!/^-?\d{1,7}$/.test(s)) return null;
+    const n = parseInt(s, 10);
+    return n === 0 ? 0 : n; // −0 vermeiden
+  }
+
+  function zeigeUebung(t, n) {
+    const cfg = t.stufen[n];
+    app.innerHTML =
+      pfad(['<a href="#/">Übersicht</a>', '<a href="#/thema/' + t.id + '">' + esc(t.titel) + '</a>', 'Stufe ' + n]) +
+      '<h1>Stufe ' + n + ': ' + esc(cfg.titel) + '</h1>' +
+      '<p class="lead">' + esc(cfg.beschreibung) + '</p>' +
+      '<div class="stand" id="stand"></div>' +
+      '<div id="meldung" aria-live="polite"></div>' +
+      '<section class="karte aufgabe" id="aufgabe"></section>';
+
+    const standEl = document.getElementById('stand');
+    const meldungEl = document.getElementById('meldung');
+    const box = document.getElementById('aufgabe');
+    let letzter = -1;
+
+    function zeichneStand() {
+      const s = MT.speicher.stufe(t.id, n);
+      const summe = s.letzte.reduce(function (a, b) { return a + b; }, 0);
+      let punkte = '';
+      for (let i = 0; i < MT.ZIEL.anzahl; i++) {
+        const v = s.letzte[i];
+        punkte += '<span class="punkt' + (v === 1 ? ' gut' : v === 0 ? ' falsch' : '') + '"></span>';
+      }
+      standEl.innerHTML =
+        '<div class="punkte" role="img" aria-label="' + summe + ' von ' + s.letzte.length + ' der letzten Aufgaben richtig">' + punkte + '</div>' +
+        '<div class="stand-text">' +
+        (s.abgeschlossen
+          ? '<strong>Stufe abgeschlossen.</strong> Sie können hier weiter üben.'
+          : 'Letzte ' + MT.ZIEL.anzahl + ' Aufgaben: ' + summe + ' im ersten Versuch richtig. Ziel: ' + MT.ZIEL.richtig + '.') +
+        '</div>';
+    }
+
+    function neueAufgabe() {
+      const g = cfg.generatoren;
+      let i;
+      do { i = Math.floor(Math.random() * g.length); } while (g.length > 1 && g[i] === g[letzter]);
+      letzter = i;
+      zeigeAufgabe(g[i]());
+    }
+
+    function zeigeAufgabe(a) {
+      const maxVersuche = a.typ === 'auswahl' && a.optionen.length <= 2 ? 1 : 2;
+      let versuch = 1, fertig = false;
+
+      let eingabe;
+      if (a.typ === 'zahl') {
+        eingabe =
+          '<form class="eingabe-zeile" novalidate autocomplete="off">' +
+          '<button type="button" class="knopf vorzeichen" title="Vorzeichen wechseln" aria-label="Vorzeichen wechseln">±</button>' +
+          '<input type="text" inputmode="numeric" class="zahl-eingabe" aria-label="Ihre Antwort" spellcheck="false">' +
+          (a.einheit ? '<span class="einheit">' + esc(a.einheit) + '</span>' : '') +
+          '<button type="submit" class="knopf primaer">Prüfen</button></form>';
+      } else {
+        eingabe = '<div class="optionen">' + a.optionen.map(function (o) {
+          return '<button type="button" class="option" data-wert="' + esc(o.wert) + '">' + esc(o.text) + '</button>';
+        }).join('') + '</div>';
+      }
+
+      box.innerHTML =
+        '<div class="frage">' + a.frage + '</div>' +
+        (a.bild ? '<div class="bild">' + a.bild + '</div>' : '') +
+        eingabe +
+        '<div class="rueckmeldung" aria-live="polite"></div>' +
+        '<div class="weiter-zeile" hidden><button type="button" class="knopf primaer weiter">Nächste Aufgabe</button></div>';
+
+      const rm = box.querySelector('.rueckmeldung');
+      const weiter = box.querySelector('.weiter');
+      const feld = box.querySelector('.zahl-eingabe');
+
+      function antwortText() {
+        if (a.typ === 'zahl') return z(a.antwort) + (a.einheit ? ' ' + esc(a.einheit) : '');
+        const o = a.optionen.find(function (o) { return o.wert === a.antwort; });
+        return esc(o ? o.text : a.antwort);
+      }
+
+      function abschliessen(richtigImErsten) {
+        fertig = true;
+        const neu = MT.speicher.erfassen(t.id, n, richtigImErsten);
+        box.querySelectorAll('input, form button, .option').forEach(function (e) {
+          e.disabled = true;
+          if (e.getAttribute('data-wert') === a.antwort) e.classList.add('gut');
+        });
+        box.querySelector('.weiter-zeile').hidden = false;
+        weiter.focus({ preventScroll: true });
+        zeichneStand();
+        if (neu) {
+          meldungEl.innerHTML = n < 3
+            ? '<div class="rm gut"><strong>Sie haben Stufe ' + n + ' abgeschlossen.</strong> Stufe ' + (n + 1) + ' ist jetzt freigeschaltet. <a href="#/thema/' + t.id + '/stufe/' + (n + 1) + '">Zu Stufe ' + (n + 1) + '</a></div>'
+            : '<div class="rm gut"><strong>Sie haben alle drei Stufen dieses Themas abgeschlossen.</strong> Sie können hier weiter üben oder <a href="#/">zur Übersicht</a> zurückkehren.</div>';
+        }
+      }
+
+      function pruefe(wert) {
+        if (fertig) return;
+        const richtig = wert === a.antwort;
+        if (richtig) {
+          rm.innerHTML =
+            '<div class="rm gut"><strong>Richtig.</strong>' + (versuch > 1 ? ' Im zweiten Versuch gelöst.' : '') + '</div>' +
+            '<details class="loesung"><summary>Lösungsweg ansehen</summary>' + a.loesung + '</details>';
+          abschliessen(versuch === 1);
+        } else if (versuch < maxVersuche) {
+          versuch++;
+          rm.innerHTML = '<div class="rm hinweis"><strong>Noch nicht richtig.</strong> ' + a.hinweis + ' Versuchen Sie es noch einmal.</div>';
+          if (feld) { feld.select(); feld.focus(); }
+        } else {
+          rm.innerHTML =
+            '<div class="rm fehler"><strong>Leider nicht richtig.</strong> Die richtige Antwort lautet: <strong>' + antwortText() + '</strong></div>' +
+            '<div class="loesung offen"><h3>Lösungsweg</h3>' + a.loesung + '</div>';
+          abschliessen(false);
+        }
+      }
+
+      if (a.typ === 'zahl') {
+        box.querySelector('form').addEventListener('submit', function (e) {
+          e.preventDefault();
+          const w = leseZahl(feld.value);
+          if (w === null) {
+            rm.innerHTML = '<div class="rm hinweis">Bitte geben Sie eine ganze Zahl ein, zum Beispiel −12.</div>';
+            feld.focus();
+            return;
+          }
+          pruefe(w);
+        });
+        box.querySelector('.vorzeichen').addEventListener('click', function () {
+          const v = feld.value.trim();
+          feld.value = /^[-−–]/.test(v) ? v.replace(/^[-−–]\s*/, '') : '−' + v;
+          feld.focus();
+        });
+        feld.focus({ preventScroll: true });
+      } else {
+        box.querySelectorAll('.option').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const w = b.getAttribute('data-wert');
+            if (w === a.antwort) b.classList.add('gut');
+            else { b.classList.add('falsch'); b.disabled = true; }
+            pruefe(w);
+          });
+        });
+      }
+
+      weiter.addEventListener('click', function () {
+        meldungEl.innerHTML = '';
+        neueAufgabe();
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+
+    zeichneStand();
+    neueAufgabe();
+  }
+
+  window.addEventListener('hashchange', route);
+  route();
+})(window.MT);
+</script>
+</body>
+</html>
