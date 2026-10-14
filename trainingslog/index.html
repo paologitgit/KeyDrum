@@ -9,14 +9,16 @@
 <style>
   :root {
     --bg: #f4f5f7; --card: #ffffff; --text: #16191d; --muted: #6b7280;
-    --line: #e3e5e8; --accent: #1f6feb; --accent-text: #ffffff;
+    --line: #e3e5e8; --grid: #eceef1; --accent: #1f6feb; --accent-text: #ffffff;
     --chip: #eef2f7; --prev: #fff7e6; --prev-line: #f2d9a6; --danger: #c62828;
+    --pr: #fde8b0; --pr-text: #6b4a00;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1114; --card: #191c21; --text: #e8eaed; --muted: #9aa0a6;
-      --line: #2a2e35; --accent: #4c8dff; --accent-text: #0b0d10;
+      --line: #2a2e35; --grid: #23272d; --accent: #4c8dff; --accent-text: #0b0d10;
       --chip: #232831; --prev: #2a2418; --prev-line: #4a3d22; --danger: #ef5350;
+      --pr: #4a3a12; --pr-text: #ffd977;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -27,26 +29,32 @@
     border-bottom: 1px solid var(--line); }
   header h1 { font-size: 20px; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   main { padding: 16px 16px calc(env(safe-area-inset-bottom) + 32px); max-width: 640px; margin: 0 auto; }
-  button, input { font: inherit; color: inherit; }
+  button, input, textarea { font: inherit; color: inherit; }
   button { border: 0; border-radius: 10px; padding: 12px 16px; background: var(--chip); cursor: pointer; min-height: 44px; }
   button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
   button.ghost { background: transparent; padding: 8px 10px; }
   button.danger { color: var(--danger); background: transparent; }
-  input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); min-height: 44px; }
+  button:disabled { opacity: .35; cursor: default; }
+  input, textarea { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); min-height: 44px; }
+  textarea { resize: vertical; min-height: 64px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; }
   .row { display: flex; gap: 8px; align-items: center; }
   .muted { color: var(--muted); font-size: 14px; }
   .banner { font-size: 13px; padding: 8px 12px; border-radius: 10px; background: var(--prev); border: 1px solid var(--prev-line); margin-bottom: 12px; }
-  .new-workout { padding: 14px; }
-  .new-workout label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
-  .list-item { display: flex; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); cursor: pointer; }
+  .pad { padding: 14px; }
+  .pad label, .field-label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .pad .field + .field { margin-top: 12px; }
+  .list-item { display: flex; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); cursor: pointer; gap: 8px; }
   .list-item:first-child { border-top: 0; }
-  .list-item .grow { flex: 1; }
+  .list-item .grow { flex: 1; min-width: 0; }
   .list-item .date { font-weight: 600; }
+  .note { font-size: 14px; color: var(--muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 22px 4px 8px; }
+  .link-btn { width: 100%; text-align: left; display: flex; justify-content: space-between; background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; }
   .ex-head { display: flex; align-items: center; padding: 14px 16px; cursor: pointer; gap: 8px; }
   .ex-head .name { font-weight: 600; flex: 1; }
   .badge { font-size: 13px; background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: 2px 9px; }
+  .badge.pr { background: var(--pr); color: var(--pr-text); }
   .ex-body { padding: 0 16px 16px; display: none; }
   .ex.open .ex-body { display: block; }
   .ex-sum { font-size: 13px; color: var(--muted); padding: 0 16px 12px; margin-top: -8px; }
@@ -54,11 +62,29 @@
   .prev { background: var(--prev); border: 1px solid var(--prev-line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .chip { background: var(--chip); border-radius: 8px; padding: 6px 10px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .chip.pr { background: var(--pr); color: var(--pr-text); }
   .chip .x { border: 0; background: none; padding: 0 0 0 4px; min-height: 0; color: var(--muted); font-size: 18px; line-height: 1; }
   .add-set { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 12px; }
   .add-set label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
   .add-set button { align-self: end; }
+  .ex-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
   .empty { padding: 18px 16px; color: var(--muted); }
+  /* Übungsverwaltung */
+  .mng { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .mng:first-child { border-top: 0; }
+  .mng button { padding: 8px 10px; min-width: 44px; }
+  .mng .hide-btn { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  /* Verlauf */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .stat { padding: 12px 14px; }
+  .stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 13px; color: var(--muted); }
+  .chart-card { padding: 14px 8px 8px 4px; position: relative; }
+  .chart-card h3 { font-size: 15px; margin: 0 0 4px 12px; }
+  .chart-card svg { display: block; width: 100%; height: 220px; touch-action: pan-y; }
+  .chart-card .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .tip { position: absolute; pointer-events: none; background: var(--text); color: var(--bg); font-size: 13px; padding: 6px 9px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -100%); display: none; }
+  .tip strong { font-variant-numeric: tabular-nums; }
   .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
     background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: 1; }
@@ -83,9 +109,11 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const fmtDate = iso => { const [y, m, d] = iso.split('-'); const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(+y, m - 1, +d).getDay()]; return `${wd}, ${d}.${m}.${y}`; };
+const fmtShort = iso => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
 const fmtW = w => (Math.round(w * 100) / 100).toString().replace('.', ',');
 const fmtSet = s => s.reps ? `${fmtW(s.weight)} kg × ${s.reps}` : `${fmtW(s.weight)} kg`;
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
+const maxWeight = sets => Math.max(...sets.map(s => s.weight));
 function summarize(sets) {
   // "3 × 60 kg · 1 × 65 kg" – aufeinanderfolgende gleiche Sätze zusammenfassen
   const groups = [];
@@ -113,11 +141,15 @@ const ApiStore = {
     if (!res.ok || data.error) throw new Error(data.error || 'Fehler');
     return data;
   },
-  exercises() { return this.call('exercises'); },
+  exercises(all = false) { return this.call('exercises', all ? { all: 1 } : {}); },
   addExercise(name) { return this.call('exercise_add', {}, { name }); },
+  updateExercise(id, fields) { return this.call('exercise_update', {}, { id, ...fields }); },
+  reorderExercises(ids) { return this.call('exercise_reorder', {}, { ids }); },
+  history(exercise_id) { return this.call('history', { exercise_id }); },
   workouts() { return this.call('workouts'); },
   createWorkout(date) { return this.call('workout_create', {}, { date }); },
   workout(id) { return this.call('workout', { id }); },
+  updateWorkout(id, fields) { return this.call('workout_update', {}, { id, ...fields }); },
   deleteWorkout(id) { return this.call('workout_delete', {}, { id }); },
   addSet(workout_id, exercise_id, weight, reps) { return this.call('set_add', {}, { workout_id, exercise_id, weight, reps }); },
   deleteSet(id) { return this.call('set_delete', {}, { id }); },
@@ -130,38 +162,69 @@ const LocalStore = {
     try { db = JSON.parse(localStorage.getItem('tl_db')); } catch {}
     if (!db) db = { seq: 0, exercises: DEFAULT_EXERCISES.map((name, i) => ({ id: i + 1, name })), workouts: [], sets: [] };
     if (!db.seq) db.seq = 1000;
+    for (const e of db.exercises) if (e.active === undefined) e.active = true;
     return db;
   },
   save(db) { try { localStorage.setItem('tl_db', JSON.stringify(db)); } catch {} },
-  async exercises() { return this.load().exercises; },
+  byDate: (a, b) => a.date.localeCompare(b.date) || a.id - b.id,
+  async exercises(all = false) { return this.load().exercises.filter(e => all || e.active); },
   async addExercise(name) {
     const db = this.load();
     const ex = db.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
-    if (ex) return ex;
-    const e = { id: ++db.seq, name }; db.exercises.push(e); this.save(db); return e;
+    if (ex) { ex.active = true; this.save(db); return ex; }
+    const e = { id: ++db.seq, name, active: true }; db.exercises.push(e); this.save(db); return e;
+  },
+  async updateExercise(id, fields) {
+    const db = this.load(), ex = db.exercises.find(e => e.id === id);
+    if ('name' in fields) {
+      if (db.exercises.some(e => e.id !== id && e.name.toLowerCase() === fields.name.toLowerCase())) throw new Error('Diesen Namen gibt es bereits');
+      ex.name = fields.name;
+    }
+    if ('active' in fields) ex.active = !!fields.active;
+    this.save(db);
+  },
+  async reorderExercises(ids) {
+    const db = this.load();
+    db.exercises.sort((a, b) => { const ia = ids.indexOf(a.id), ib = ids.indexOf(b.id); return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib); });
+    this.save(db);
+  },
+  async history(exercise_id) {
+    const db = this.load();
+    return db.workouts.slice().sort(this.byDate).map(w => ({
+      workout_id: w.id, date: w.date,
+      sets: db.sets.filter(s => s.workout_id === w.id && s.exercise_id === exercise_id).sort((a, b) => a.set_no - b.set_no).map(s => ({ weight: s.weight, reps: s.reps })),
+    })).filter(h => h.sets.length);
   },
   async workouts() {
     const db = this.load();
     return db.workouts.map(w => {
       const s = db.sets.filter(x => x.workout_id === w.id);
       return { ...w, set_count: s.length, exercise_count: new Set(s.map(x => x.exercise_id)).size };
-    }).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    }).sort((a, b) => this.byDate(b, a));
   },
   async createWorkout(date) { const db = this.load(); const w = { id: ++db.seq, date, note: null }; db.workouts.push(w); this.save(db); return { id: w.id }; },
   async workout(id) {
     const db = this.load();
     const w = db.workouts.find(x => x.id === id);
     if (!w) throw new Error('Training nicht gefunden');
-    const earlier = db.workouts.filter(x => x.date < w.date || (x.date === w.date && x.id < w.id))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
-    const previous = {};
+    const earlier = db.workouts.filter(x => this.byDate(x, w) < 0).sort((a, b) => this.byDate(b, a));
+    const earlierIds = new Set(earlier.map(x => x.id));
+    const previous = {}, best = {};
     for (const ex of db.exercises) {
       for (const pw of earlier) {
         const s = db.sets.filter(x => x.workout_id === pw.id && x.exercise_id === ex.id).sort((a, b) => a.set_no - b.set_no);
         if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps })) }; break; }
       }
+      const ws = db.sets.filter(x => x.exercise_id === ex.id && earlierIds.has(x.workout_id)).map(x => x.weight);
+      if (ws.length) best[ex.id] = Math.max(...ws);
     }
-    return { ...w, sets: db.sets.filter(x => x.workout_id === id).sort((a, b) => a.set_no - b.set_no), previous };
+    return { ...w, sets: db.sets.filter(x => x.workout_id === id).sort((a, b) => a.set_no - b.set_no), previous, best };
+  },
+  async updateWorkout(id, fields) {
+    const db = this.load(), w = db.workouts.find(x => x.id === id);
+    if ('note' in fields) w.note = fields.note.trim() || null;
+    if ('date' in fields) w.date = fields.date;
+    this.save(db);
   },
   async deleteWorkout(id) { const db = this.load(); db.workouts = db.workouts.filter(w => w.id !== id); db.sets = db.sets.filter(s => s.workout_id !== id); this.save(db); },
   async addSet(workout_id, exercise_id, weight, reps) {
@@ -183,52 +246,64 @@ async function pickStore() {
   }
 }
 
-// ---------- Ansichten ----------
+// ---------- Navigation ----------
+// #w12 = Training 12 · #ex = Übungen verwalten · #h5 = Verlauf Übung 5
 const app = $('#app');
-let state = { view: 'home', workoutId: null, open: new Set() };
+let state = { workoutId: null, open: new Set() };
+
+let navDepth = 0;   // Anzahl eigener Navigationsschritte – „Zurück“ verlässt die App nie
+function go(hash) { if (location.hash !== hash) { history.pushState(null, '', hash || location.pathname); navDepth++; } route(); }
+function route() {
+  const h = location.hash;
+  let m;
+  if ((m = h.match(/^#w(\d+)$/))) return showWorkout(Number(m[1]));
+  if ((m = h.match(/^#h(\d+)$/))) return showHistory(Number(m[1]));
+  if (h === '#ex') return showExercises();
+  return showHome();
+}
+window.onpopstate = () => { navDepth = Math.max(0, navDepth - 1); route(); };
+$('#backBtn').onclick = () => { navDepth > 0 ? history.back() : (history.replaceState(null, '', location.pathname), route()); };
 
 function setHeader(title, back) {
   $('#title').textContent = title;
   $('#backBtn').hidden = !back;
 }
-$('#backBtn').onclick = () => { history.back(); };
-window.onpopstate = () => { const id = Number(location.hash.replace('#w', '')) || null; id ? showWorkout(id, false) : showHome(false); };
-
 function showError(e) {
   if (e.auth) return showLogin();
   toast(e.message || 'Fehler');
   console.error(e);
 }
 
+// ---------- Ansicht: Zugangscode ----------
 function showLogin() {
   setHeader('Trainingslog', false);
   app.innerHTML = `
-    <div class="card new-workout">
+    <div class="card pad">
       <label for="tok">Zugangscode</label>
       <div class="row"><input id="tok" type="password" autocomplete="current-password"><button class="primary" id="tokOk">OK</button></div>
     </div>`;
   $('#tokOk').onclick = async () => {
     try { localStorage.setItem('tl_token', $('#tok').value.trim()); } catch {}
     const r = await pickStore();
-    if (r === 'auth') toast('Code falsch'); else showHome();
+    if (r === 'auth') toast('Code falsch'); else route();
   };
 }
 
-async function showHome(push = true) {
-  state.view = 'home';
-  if (push && location.hash) history.pushState(null, '', location.pathname);
+// ---------- Ansicht: Start ----------
+async function showHome() {
   setHeader('Trainingslog', false);
   let workouts = [];
   try { workouts = await store.workouts(); } catch (e) { return showError(e); }
   app.innerHTML = `
     ${store.mode === 'local' ? '<div class="banner">Lokaler Modus: Daten werden nur in diesem Browser gespeichert. Mit api.php und MySQL werden sie zentral abgelegt.</div>' : ''}
-    <div class="card new-workout">
+    <div class="card pad">
       <label for="date">Neues Training</label>
       <div class="row">
         <input id="date" type="date" value="${today()}">
         <button class="primary" id="createBtn">Starten</button>
       </div>
     </div>
+    <button class="link-btn" id="manageBtn"><span>Übungen verwalten</span><span class="muted">›</span></button>
     <h2>Bisherige Trainings</h2>
     <div class="card">
       ${workouts.length ? workouts.map(w => `
@@ -236,6 +311,7 @@ async function showHome(push = true) {
           <div class="grow">
             <div class="date">${fmtDate(w.date)}</div>
             <div class="muted">${w.exercise_count} Übungen · ${w.set_count} Sätze</div>
+            ${w.note ? `<div class="note">${esc(w.note)}</div>` : ''}
           </div>
           <span class="muted">›</span>
         </div>`).join('') : '<div class="empty">Noch keine Trainings erfasst.</div>'}
@@ -243,32 +319,42 @@ async function showHome(push = true) {
   $('#createBtn').onclick = async () => {
     const date = $('#date').value;
     if (!date) return toast('Bitte Datum wählen');
-    try { const r = await store.createWorkout(date); showWorkout(r.id); } catch (e) { showError(e); }
+    try { const r = await store.createWorkout(date); go(`#w${r.id}`); } catch (e) { showError(e); }
   };
-  app.querySelectorAll('.list-item').forEach(el => el.onclick = () => showWorkout(Number(el.dataset.id)));
+  $('#manageBtn').onclick = () => go('#ex');
+  app.querySelectorAll('.list-item').forEach(el => el.onclick = () => go(`#w${el.dataset.id}`));
 }
 
-async function showWorkout(id, push = true) {
+// ---------- Ansicht: Training ----------
+async function showWorkout(id) {
   if (state.workoutId !== id) state.open = new Set();
-  state.view = 'workout'; state.workoutId = id;
-  if (push && location.hash !== `#w${id}`) history.pushState(null, '', `#w${id}`);
-  let w, exercises;
-  try { [w, exercises] = await Promise.all([store.workout(id), store.exercises()]); } catch (e) { return showError(e); }
+  state.workoutId = id;
+  let w, allEx;
+  try { [w, allEx] = await Promise.all([store.workout(id), store.exercises(true)]); } catch (e) { return showError(e); }
   setHeader(fmtDate(w.date), true);
 
   const setsBy = {};
   for (const s of w.sets) (setsBy[s.exercise_id] ||= []).push(s);
+  // Ausgeblendete Übungen nur zeigen, wenn sie in diesem Training Sätze haben
+  const exercises = allEx.filter(ex => ex.active || setsBy[ex.id]);
+  const isPr = (exId, weight) => w.best[exId] !== undefined && weight > w.best[exId];
 
-  app.innerHTML = exercises.map(ex => {
+  app.innerHTML = `
+    <div class="card pad">
+      <div class="field"><label for="wDate">Datum</label><input id="wDate" type="date" value="${w.date}"></div>
+      <div class="field"><label for="wNote">Notiz</label><textarea id="wNote" maxlength="255" placeholder="z. B. Schulter etwas müde">${esc(w.note)}</textarea></div>
+    </div>` + exercises.map(ex => {
     const cur = setsBy[ex.id] || [], prev = w.previous[ex.id];
     const lastW = cur.length ? cur[cur.length - 1] : prev?.sets[prev.sets.length - 1];
     const open = state.open.has(ex.id);
+    const hasPr = cur.some(s => isPr(ex.id, s.weight));
     return `
     <div class="card ex ${open ? 'open' : ''}" data-ex="${ex.id}">
       <div class="ex-head">
         <span class="name">${esc(ex.name)}</span>
+        ${hasPr ? '<span class="badge pr">★ Bestwert</span>' : ''}
         ${cur.length ? `<span class="badge">${cur.length}</span>` : ''}
-        <span class="muted">${open ? '▾' : '▸'}</span>
+        <span class="muted arrow">${open ? '▾' : '▸'}</span>
       </div>
       <div class="ex-sum">${prev ? `Letztes Mal: ${esc(summarize(prev.sets))}` : 'Noch nie gemacht'}</div>
       <div class="ex-body">
@@ -277,10 +363,11 @@ async function showWorkout(id, push = true) {
             <div class="chips">${prev.sets.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}</span>`).join('')}</div>
             ${!cur.length ? `<button class="ghost copy" style="margin-top:6px;padding-left:0">Sätze übernehmen</button>` : ''}`
           : 'Diese Übung wurde noch nie erfasst.'}
+          ${w.best[ex.id] !== undefined ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtW(w.best[ex.id])} kg</div>` : ''}
         </div>
         <div><strong>Heute</strong></div>
         <div class="chips">
-          ${cur.length ? cur.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}<button class="x" data-del="${s.id}" aria-label="Satz löschen">×</button></span>`).join('')
+          ${cur.length ? cur.map((s, i) => `<span class="chip ${isPr(ex.id, s.weight) ? 'pr' : ''}">${isPr(ex.id, s.weight) ? '★ ' : ''}${i + 1}. ${fmtSet(s)}<button class="x" data-del="${s.id}" aria-label="Satz löschen">×</button></span>`).join('')
             : '<span class="muted">Noch keine Sätze</span>'}
         </div>
         <div class="add-set">
@@ -288,59 +375,225 @@ async function showWorkout(id, push = true) {
           <div><label>Wdh. (optional)</label><input class="r" inputmode="numeric" value="${lastW?.reps ?? ''}"></div>
           <button class="primary add">+ Satz</button>
         </div>
+        <div class="ex-foot"><button class="ghost hist">Verlauf ›</button></div>
       </div>
     </div>`;
   }).join('') + `
     <h2>Neue Übung</h2>
-    <div class="card new-workout">
+    <div class="card pad">
       <div class="row"><input id="newEx" placeholder="Name der Übung" maxlength="100"><button class="primary" id="addEx">Hinzufügen</button></div>
     </div>
     <button class="danger" id="delWorkout" style="width:100%;margin-top:16px">Training löschen</button>`;
 
+  $('#wDate').onchange = async e => {
+    if (!e.target.value) return;
+    try { await store.updateWorkout(id, { date: e.target.value }); showWorkout(id); } catch (err) { showError(err); }
+  };
+  $('#wNote').onchange = async e => {
+    try { await store.updateWorkout(id, { note: e.target.value }); toast('Notiz gespeichert'); } catch (err) { showError(err); }
+  };
+
   app.querySelectorAll('.ex').forEach(card => {
     const exId = Number(card.dataset.ex);
     $('.ex-head', card).onclick = () => {
-      card.classList.toggle('open');
-      card.classList.contains('open') ? state.open.add(exId) : state.open.delete(exId);
-      $('.ex-head .muted', card).textContent = card.classList.contains('open') ? '▾' : '▸';
+      const open = card.classList.toggle('open');
+      open ? state.open.add(exId) : state.open.delete(exId);
+      $('.arrow', card).textContent = open ? '▾' : '▸';
     };
     $('.add', card).onclick = async () => {
       const weight = parseNum($('.w', card).value), reps = parseNum($('.r', card).value);
       if (weight === null || weight < 0) return toast('Bitte Gewicht eingeben');
-      try { await store.addSet(id, exId, weight, reps ? Math.round(reps) : null); state.open.add(exId); showWorkout(id, false); }
-      catch (e) { showError(e); }
+      try {
+        await store.addSet(id, exId, weight, reps ? Math.round(reps) : null);
+        if (isPr(exId, weight)) toast('Neuer Bestwert!');
+        state.open.add(exId); showWorkout(id);
+      } catch (e) { showError(e); }
     };
+    $('.hist', card).onclick = () => go(`#h${exId}`);
     const copy = $('.copy', card);
     if (copy) copy.onclick = async () => {
       try {
         for (const s of w.previous[exId].sets) await store.addSet(id, exId, s.weight, s.reps);
-        state.open.add(exId); showWorkout(id, false);
+        state.open.add(exId); showWorkout(id);
       } catch (e) { showError(e); }
     };
     card.querySelectorAll('[data-del]').forEach(b => b.onclick = async ev => {
       ev.stopPropagation();
-      try { await store.deleteSet(Number(b.dataset.del)); showWorkout(id, false); } catch (e) { showError(e); }
+      try { await store.deleteSet(Number(b.dataset.del)); showWorkout(id); } catch (e) { showError(e); }
     });
   });
 
   $('#addEx').onclick = async () => {
     const name = $('#newEx').value.trim();
     if (!name) return;
-    try { const ex = await store.addExercise(name); state.open.add(ex.id); toast(`„${name}" hinzugefügt`); showWorkout(id, false); }
+    try { const ex = await store.addExercise(name); state.open.add(ex.id); toast(`„${name}“ hinzugefügt`); showWorkout(id); }
     catch (e) { showError(e); }
   };
   $('#delWorkout').onclick = async () => {
     if (!confirm('Dieses Training mit allen Sätzen löschen?')) return;
-    try { await store.deleteWorkout(id); showHome(); } catch (e) { showError(e); }
+    try { await store.deleteWorkout(id); history.replaceState(null, '', location.pathname); route(); } catch (e) { showError(e); }
   };
+}
+
+// ---------- Ansicht: Übungen verwalten ----------
+async function showExercises() {
+  setHeader('Übungen verwalten', true);
+  let all;
+  try { all = await store.exercises(true); } catch (e) { return showError(e); }
+  const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
+  app.innerHTML = `
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. Mit den Pfeilen legen Sie die Reihenfolge fest, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <div class="card">
+      ${active.map((e, i) => `
+        <div class="mng" data-id="${e.id}">
+          <input class="nm" value="${esc(e.name)}" maxlength="100" aria-label="Name">
+          <button class="up" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
+          <button class="down" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
+          <button class="hide-btn" aria-label="Ausblenden" title="Ausblenden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+        </div>`).join('') || '<div class="empty">Keine aktiven Übungen.</div>'}
+    </div>
+    <div class="card pad">
+      <label for="newEx">Neue Übung</label>
+      <div class="row"><input id="newEx" placeholder="Name der Übung" maxlength="100"><button class="primary" id="addEx">Hinzufügen</button></div>
+    </div>
+    ${hidden.length ? `<h2>Ausgeblendet</h2><div class="card">
+      ${hidden.map(e => `
+        <div class="list-item" data-id="${e.id}" style="cursor:default">
+          <div class="grow">${esc(e.name)}</div>
+          <button class="show-btn">Einblenden</button>
+        </div>`).join('')}
+    </div>` : ''}`;
+
+  const ids = active.map(e => e.id);
+  const move = async (idx, dir) => {
+    [ids[idx], ids[idx + dir]] = [ids[idx + dir], ids[idx]];
+    try { await store.reorderExercises([...ids, ...hidden.map(e => e.id)]); showExercises(); } catch (e) { showError(e); }
+  };
+  app.querySelectorAll('.mng').forEach((row, idx) => {
+    const exId = Number(row.dataset.id);
+    const nm = $('.nm', row);
+    nm.onchange = async () => {
+      const name = nm.value.trim();
+      if (!name) { nm.value = active[idx].name; return; }
+      try { await store.updateExercise(exId, { name }); active[idx].name = name; toast('Gespeichert'); }
+      catch (e) { nm.value = active[idx].name; showError(e); }
+    };
+    $('.up', row).onclick = () => move(idx, -1);
+    $('.down', row).onclick = () => move(idx, 1);
+    $('.hide-btn', row).onclick = async () => {
+      try { await store.updateExercise(exId, { active: false }); showExercises(); } catch (e) { showError(e); }
+    };
+  });
+  app.querySelectorAll('.show-btn').forEach(b => b.onclick = async () => {
+    try { await store.updateExercise(Number(b.closest('[data-id]').dataset.id), { active: true }); showExercises(); } catch (e) { showError(e); }
+  });
+  $('#addEx').onclick = async () => {
+    const name = $('#newEx').value.trim();
+    if (!name) return;
+    try { await store.addExercise(name); toast(`„${name}“ hinzugefügt`); showExercises(); } catch (e) { showError(e); }
+  };
+}
+
+// ---------- Ansicht: Verlauf einer Übung ----------
+async function showHistory(exId) {
+  let hist, all;
+  try { [hist, all] = await Promise.all([store.history(exId), store.exercises(true)]); } catch (e) { return showError(e); }
+  const ex = all.find(e => e.id === exId);
+  setHeader(ex ? ex.name : 'Verlauf', true);
+  if (!hist.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine Sätze erfasst.</div>'; return; }
+
+  // Pro Training: Höchstgewicht; Bestwert = höher als alle früheren Trainings
+  let runningBest = -Infinity;
+  const points = hist.map(h => {
+    const max = maxWeight(h.sets);
+    const pr = max > runningBest && runningBest !== -Infinity;
+    runningBest = Math.max(runningBest, max);
+    return { ...h, max, pr };
+  });
+  const best = runningBest;
+
+  app.innerHTML = `
+    <div class="stats">
+      <div class="card stat"><div class="v">${fmtW(best)} kg</div><div class="l">Bestwert</div></div>
+      <div class="card stat"><div class="v">${points.length}</div><div class="l">Trainings</div></div>
+    </div>
+    <div class="card chart-card">
+      <h3>Höchstgewicht pro Training (kg)</h3>
+      <div id="chart"></div>
+      <div class="tip" id="tip"></div>
+    </div>
+    <h2>Alle Trainings</h2>
+    <div class="card">
+      ${points.slice().reverse().map(p => `
+        <div class="list-item" data-w="${p.workout_id}">
+          <div class="grow">
+            <div class="date">${fmtDate(p.date)} ${p.pr ? '<span class="badge pr">★ Bestwert</span>' : ''}</div>
+            <div class="muted">${esc(summarize(p.sets))}</div>
+          </div>
+          <span class="muted">›</span>
+        </div>`).join('')}
+    </div>`;
+  app.querySelectorAll('[data-w]').forEach(el => el.onclick = () => go(`#w${el.dataset.w}`));
+  drawChart($('#chart'), $('#tip'), points);
+}
+
+function drawChart(host, tip, points) {
+  const W = Math.max(host.clientWidth, 280), H = 220;
+  const m = { t: 12, r: 16, b: 26, l: 40 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const vals = points.map(p => p.max);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  // Saubere Achsenschritte
+  const span = hi - lo || Math.max(hi * 0.2, 5);
+  const step = [1, 2, 2.5, 5, 10, 20, 25, 50, 100].find(s => span / s <= 4) || 100;
+  lo = Math.max(0, Math.floor((lo - span * 0.1) / step) * step);
+  hi = Math.ceil((hi + span * 0.1) / step) * step;
+  if (hi === lo) hi = lo + step;
+  const x = i => m.l + (points.length === 1 ? iw / 2 : (i / (points.length - 1)) * iw);
+  const y = v => m.t + ih - ((v - lo) / (hi - lo)) * ih;
+
+  const ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
+  const grid = ticks.map(v => `
+    <line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
+    <text class="axis" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${fmtW(v)}</text>`).join('');
+  const xLabels = (points.length === 1 ? [0] : [0, points.length - 1]).map(i => `
+    <text class="axis" x="${x(i)}" y="${H - 6}" text-anchor="${points.length === 1 ? 'middle' : i === 0 ? 'start' : 'end'}">${fmtShort(points[i].date)}</text>`).join('');
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.max).toFixed(1)}`).join('');
+  const dots = points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.max)}" r="${p.pr ? 5 : 4}" fill="${p.pr ? 'var(--pr-text)' : 'var(--accent)'}" stroke="var(--card)" stroke-width="2"/>`).join('');
+
+  host.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Höchstgewicht pro Training">
+      ${grid}${xLabels}
+      <line id="cross" y1="${m.t}" y2="${m.t + ih}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      <rect x="${m.l}" y="0" width="${iw}" height="${H}" fill="transparent" id="hit"/>
+    </svg>`;
+  const svg = $('svg', host), cross = $('#cross', host);
+  const show = ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+    let best = 0;
+    points.forEach((p, i) => { if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i; });
+    const p = points[best];
+    cross.setAttribute('x1', x(best)); cross.setAttribute('x2', x(best)); cross.setAttribute('visibility', 'visible');
+    tip.innerHTML = `${fmtDate(p.date)}<br><strong>${fmtW(p.max)} kg</strong>${p.pr ? ' ★' : ''} · ${p.sets.length} Sätze`;
+    const sx = x(best) * (r.width / W) + 4, sy = y(p.max) * (r.height / H) + 14 - 10;
+    tip.style.display = 'block';
+    tip.style.left = Math.min(Math.max(sx, 70), r.width - 70) + 'px';
+    tip.style.top = Math.max(sy, 40) + 'px';
+  };
+  const hide = () => { tip.style.display = 'none'; cross.setAttribute('visibility', 'hidden'); };
+  svg.addEventListener('pointermove', show);
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointerleave', hide);
 }
 
 // ---------- Start ----------
 (async () => {
   const r = await pickStore();
   if (r === 'auth') return showLogin();
-  const id = Number(location.hash.replace('#w', '')) || null;
-  id ? showWorkout(id, false) : showHome(false);
+  route();
 })();
 </script>
 </body>

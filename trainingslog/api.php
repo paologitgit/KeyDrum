@@ -67,14 +67,70 @@ function previousSets(PDO $db, int $workoutId): array {
     return $res;
 }
 
+/** Bisheriges Höchstgewicht je Übung aus allen Trainings vor dem angegebenen Training. */
+function previousBest(PDO $db, int $workoutId): array {
+    $st = $db->prepare('SELECT s.exercise_id, MAX(s.weight_kg) AS best
+                        FROM sets s JOIN workouts w ON w.id = s.workout_id
+                        JOIN workouts cur ON cur.id = :id
+                        WHERE w.workout_date < cur.workout_date
+                           OR (w.workout_date = cur.workout_date AND w.id < cur.id)
+                        GROUP BY s.exercise_id');
+    $st->execute([':id' => $workoutId]);
+    $res = [];
+    foreach ($st as $r) $res[(int)$r['exercise_id']] = (float)$r['best'];
+    return $res;
+}
+
 try {
     switch ($action) {
         case 'ping':
             out(['ok' => true]);
 
         case 'exercises':
-            $rows = $db->query('SELECT id, name FROM exercises WHERE active = 1 ORDER BY sort_order, name')->fetchAll();
-            out(array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name']], $rows));
+            $where = empty($_GET['all']) ? 'WHERE active = 1' : '';
+            $rows = $db->query("SELECT id, name, active FROM exercises $where ORDER BY sort_order, name")->fetchAll();
+            out(array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'active' => (bool)$r['active']], $rows));
+
+        case 'exercise_update':
+            if (!$isPost) fail('POST erforderlich', 405);
+            $id = intParam($in, 'id');
+            if (array_key_exists('name', $in)) {
+                $name = trim((string)$in['name']);
+                if ($name === '' || mb_strlen($name) > 100) fail('Ungültiger Name');
+                $dup = $db->prepare('SELECT id FROM exercises WHERE name = ? AND id <> ?');
+                $dup->execute([$name, $id]);
+                if ($dup->fetch()) fail('Diesen Namen gibt es bereits');
+                $db->prepare('UPDATE exercises SET name = ? WHERE id = ?')->execute([$name, $id]);
+            }
+            if (array_key_exists('active', $in)) {
+                $db->prepare('UPDATE exercises SET active = ? WHERE id = ?')->execute([$in['active'] ? 1 : 0, $id]);
+            }
+            out(['ok' => true]);
+
+        case 'exercise_reorder':
+            if (!$isPost) fail('POST erforderlich', 405);
+            $ids = $in['ids'] ?? null;
+            if (!is_array($ids)) fail("Parameter 'ids' fehlt");
+            $db->beginTransaction();
+            $st = $db->prepare('UPDATE exercises SET sort_order = ? WHERE id = ?');
+            foreach (array_values($ids) as $i => $eid) $st->execute([($i + 1) * 10, (int)$eid]);
+            $db->commit();
+            out(['ok' => true]);
+
+        case 'history':
+            $eid = intParam($_GET, 'exercise_id');
+            $st = $db->prepare('SELECT w.id AS workout_id, w.workout_date, s.weight_kg, s.reps
+                                FROM sets s JOIN workouts w ON w.id = s.workout_id
+                                WHERE s.exercise_id = ?
+                                ORDER BY w.workout_date, w.id, s.set_no');
+            $st->execute([$eid]);
+            $res = [];
+            foreach ($st as $r) {
+                $wid = (int)$r['workout_id'];
+                $res[$wid] ??= ['workout_id' => $wid, 'date' => $r['workout_date'], 'sets' => []];
+                $res[$wid]['sets'][] = ['weight' => (float)$r['weight_kg'], 'reps' => $r['reps'] === null ? null : (int)$r['reps']];
+            }
+            out(array_values($res));
 
         case 'exercise_add':
             if (!$isPost) fail('POST erforderlich', 405);
@@ -125,7 +181,22 @@ try {
             out([
                 'id' => (int)$wk['id'], 'date' => $wk['workout_date'], 'note' => $wk['note'],
                 'sets' => $sets, 'previous' => (object)previousSets($db, $id),
+                'best' => (object)previousBest($db, $id),
             ]);
+
+        case 'workout_update':
+            if (!$isPost) fail('POST erforderlich', 405);
+            $id = intParam($in, 'id');
+            if (array_key_exists('note', $in)) {
+                $note = trim((string)$in['note']);
+                if (mb_strlen($note) > 255) fail('Notiz zu lang (max. 255 Zeichen)');
+                $db->prepare('UPDATE workouts SET note = ? WHERE id = ?')->execute([$note === '' ? null : $note, $id]);
+            }
+            if (array_key_exists('date', $in)) {
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$in['date'])) fail('Ungültiges Datum');
+                $db->prepare('UPDATE workouts SET workout_date = ? WHERE id = ?')->execute([$in['date'], $id]);
+            }
+            out(['ok' => true]);
 
         case 'workout_delete':
             if (!$isPost) fail('POST erforderlich', 405);
