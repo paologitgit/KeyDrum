@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Trainingslog</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #16191d; --muted: #6b7280;
+    --line: #e3e5e8; --accent: #1f6feb; --accent-text: #ffffff;
+    --chip: #eef2f7; --prev: #fff7e6; --prev-line: #f2d9a6; --danger: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1114; --card: #191c21; --text: #e8eaed; --muted: #9aa0a6;
+      --line: #2a2e35; --accent: #4c8dff; --accent-text: #0b0d10;
+      --chip: #232831; --prev: #2a2418; --prev-line: #4a3d22; --danger: #ef5350;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+    padding: calc(env(safe-area-inset-top) + 12px) 16px 10px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 20px; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  main { padding: 16px 16px calc(env(safe-area-inset-bottom) + 32px); max-width: 640px; margin: 0 auto; }
+  button, input { font: inherit; color: inherit; }
+  button { border: 0; border-radius: 10px; padding: 12px 16px; background: var(--chip); cursor: pointer; min-height: 44px; }
+  button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button.ghost { background: transparent; padding: 8px 10px; }
+  button.danger { color: var(--danger); background: transparent; }
+  input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); min-height: 44px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .banner { font-size: 13px; padding: 8px 12px; border-radius: 10px; background: var(--prev); border: 1px solid var(--prev-line); margin-bottom: 12px; }
+  .new-workout { padding: 14px; }
+  .new-workout label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .list-item { display: flex; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); cursor: pointer; }
+  .list-item:first-child { border-top: 0; }
+  .list-item .grow { flex: 1; }
+  .list-item .date { font-weight: 600; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 22px 4px 8px; }
+  .ex-head { display: flex; align-items: center; padding: 14px 16px; cursor: pointer; gap: 8px; }
+  .ex-head .name { font-weight: 600; flex: 1; }
+  .badge { font-size: 13px; background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: 2px 9px; }
+  .ex-body { padding: 0 16px 16px; display: none; }
+  .ex.open .ex-body { display: block; }
+  .ex-sum { font-size: 13px; color: var(--muted); padding: 0 16px 12px; margin-top: -8px; }
+  .ex.open .ex-sum { display: none; }
+  .prev { background: var(--prev); border: 1px solid var(--prev-line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { background: var(--chip); border-radius: 8px; padding: 6px 10px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .chip .x { border: 0; background: none; padding: 0 0 0 4px; min-height: 0; color: var(--muted); font-size: 18px; line-height: 1; }
+  .add-set { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 12px; }
+  .add-set label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .add-set button { align-self: end; }
+  .empty { padding: 18px 16px; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <button class="ghost" id="backBtn" hidden aria-label="Zurück">‹ Zurück</button>
+  <h1 id="title">Trainingslog</h1>
+</header>
+<main id="app"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Konfiguration ----------
+const API_URL = 'api.php';          // Pfad zur PHP-API
+const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
+  'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse'];
+
+// ---------- Hilfsfunktionen ----------
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDate = iso => { const [y, m, d] = iso.split('-'); const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(+y, m - 1, +d).getDay()]; return `${wd}, ${d}.${m}.${y}`; };
+const fmtW = w => (Math.round(w * 100) / 100).toString().replace('.', ',');
+const fmtSet = s => s.reps ? `${fmtW(s.weight)} kg × ${s.reps}` : `${fmtW(s.weight)} kg`;
+const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
+function summarize(sets) {
+  // "3 × 60 kg · 1 × 65 kg" – aufeinanderfolgende gleiche Sätze zusammenfassen
+  const groups = [];
+  for (const s of sets) {
+    const key = fmtSet(s), last = groups[groups.length - 1];
+    if (last && last.key === key) last.n++; else groups.push({ key, n: 1 });
+  }
+  return groups.map(g => `${g.n} × ${g.key}`).join(' · ');
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+
+// ---------- Speicher: MySQL über API oder lokal im Browser ----------
+const ApiStore = {
+  mode: 'api',
+  token: () => { try { return localStorage.getItem('tl_token') || ''; } catch { return ''; } },
+  async call(action, params = {}, body) {
+    const qs = new URLSearchParams({ action, ...params });
+    const res = await fetch(`${API_URL}?${qs}`, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-Token': this.token() },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ error: 'Ungültige Antwort' }));
+    if (res.status === 401) { const err = new Error('auth'); err.auth = true; throw err; }
+    if (!res.ok || data.error) throw new Error(data.error || 'Fehler');
+    return data;
+  },
+  exercises() { return this.call('exercises'); },
+  addExercise(name) { return this.call('exercise_add', {}, { name }); },
+  workouts() { return this.call('workouts'); },
+  createWorkout(date) { return this.call('workout_create', {}, { date }); },
+  workout(id) { return this.call('workout', { id }); },
+  deleteWorkout(id) { return this.call('workout_delete', {}, { id }); },
+  addSet(workout_id, exercise_id, weight, reps) { return this.call('set_add', {}, { workout_id, exercise_id, weight, reps }); },
+  deleteSet(id) { return this.call('set_delete', {}, { id }); },
+};
+
+const LocalStore = {
+  mode: 'local',
+  load() {
+    let db = null;
+    try { db = JSON.parse(localStorage.getItem('tl_db')); } catch {}
+    if (!db) db = { seq: 0, exercises: DEFAULT_EXERCISES.map((name, i) => ({ id: i + 1, name })), workouts: [], sets: [] };
+    if (!db.seq) db.seq = 1000;
+    return db;
+  },
+  save(db) { try { localStorage.setItem('tl_db', JSON.stringify(db)); } catch {} },
+  async exercises() { return this.load().exercises; },
+  async addExercise(name) {
+    const db = this.load();
+    const ex = db.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
+    if (ex) return ex;
+    const e = { id: ++db.seq, name }; db.exercises.push(e); this.save(db); return e;
+  },
+  async workouts() {
+    const db = this.load();
+    return db.workouts.map(w => {
+      const s = db.sets.filter(x => x.workout_id === w.id);
+      return { ...w, set_count: s.length, exercise_count: new Set(s.map(x => x.exercise_id)).size };
+    }).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  },
+  async createWorkout(date) { const db = this.load(); const w = { id: ++db.seq, date, note: null }; db.workouts.push(w); this.save(db); return { id: w.id }; },
+  async workout(id) {
+    const db = this.load();
+    const w = db.workouts.find(x => x.id === id);
+    if (!w) throw new Error('Training nicht gefunden');
+    const earlier = db.workouts.filter(x => x.date < w.date || (x.date === w.date && x.id < w.id))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    const previous = {};
+    for (const ex of db.exercises) {
+      for (const pw of earlier) {
+        const s = db.sets.filter(x => x.workout_id === pw.id && x.exercise_id === ex.id).sort((a, b) => a.set_no - b.set_no);
+        if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps })) }; break; }
+      }
+    }
+    return { ...w, sets: db.sets.filter(x => x.workout_id === id).sort((a, b) => a.set_no - b.set_no), previous };
+  },
+  async deleteWorkout(id) { const db = this.load(); db.workouts = db.workouts.filter(w => w.id !== id); db.sets = db.sets.filter(s => s.workout_id !== id); this.save(db); },
+  async addSet(workout_id, exercise_id, weight, reps) {
+    const db = this.load();
+    const set_no = db.sets.filter(s => s.workout_id === workout_id && s.exercise_id === exercise_id).reduce((m, s) => Math.max(m, s.set_no), 0) + 1;
+    const s = { id: ++db.seq, workout_id, exercise_id, set_no, weight, reps }; db.sets.push(s); this.save(db); return s;
+  },
+  async deleteSet(id) { const db = this.load(); db.sets = db.sets.filter(s => s.id !== id); this.save(db); },
+};
+
+let store = LocalStore;
+async function pickStore() {
+  try {
+    await ApiStore.call('ping');
+    store = ApiStore;
+  } catch (e) {
+    if (e.auth) { store = ApiStore; return 'auth'; }
+    store = LocalStore;
+  }
+}
+
+// ---------- Ansichten ----------
+const app = $('#app');
+let state = { view: 'home', workoutId: null, open: new Set() };
+
+function setHeader(title, back) {
+  $('#title').textContent = title;
+  $('#backBtn').hidden = !back;
+}
+$('#backBtn').onclick = () => { history.back(); };
+window.onpopstate = () => { const id = Number(location.hash.replace('#w', '')) || null; id ? showWorkout(id, false) : showHome(false); };
+
+function showError(e) {
+  if (e.auth) return showLogin();
+  toast(e.message || 'Fehler');
+  console.error(e);
+}
+
+function showLogin() {
+  setHeader('Trainingslog', false);
+  app.innerHTML = `
+    <div class="card new-workout">
+      <label for="tok">Zugangscode</label>
+      <div class="row"><input id="tok" type="password" autocomplete="current-password"><button class="primary" id="tokOk">OK</button></div>
+    </div>`;
+  $('#tokOk').onclick = async () => {
+    try { localStorage.setItem('tl_token', $('#tok').value.trim()); } catch {}
+    const r = await pickStore();
+    if (r === 'auth') toast('Code falsch'); else showHome();
+  };
+}
+
+async function showHome(push = true) {
+  state.view = 'home';
+  if (push && location.hash) history.pushState(null, '', location.pathname);
+  setHeader('Trainingslog', false);
+  let workouts = [];
+  try { workouts = await store.workouts(); } catch (e) { return showError(e); }
+  app.innerHTML = `
+    ${store.mode === 'local' ? '<div class="banner">Lokaler Modus: Daten werden nur in diesem Browser gespeichert. Mit api.php und MySQL werden sie zentral abgelegt.</div>' : ''}
+    <div class="card new-workout">
+      <label for="date">Neues Training</label>
+      <div class="row">
+        <input id="date" type="date" value="${today()}">
+        <button class="primary" id="createBtn">Starten</button>
+      </div>
+    </div>
+    <h2>Bisherige Trainings</h2>
+    <div class="card">
+      ${workouts.length ? workouts.map(w => `
+        <div class="list-item" data-id="${w.id}">
+          <div class="grow">
+            <div class="date">${fmtDate(w.date)}</div>
+            <div class="muted">${w.exercise_count} Übungen · ${w.set_count} Sätze</div>
+          </div>
+          <span class="muted">›</span>
+        </div>`).join('') : '<div class="empty">Noch keine Trainings erfasst.</div>'}
+    </div>`;
+  $('#createBtn').onclick = async () => {
+    const date = $('#date').value;
+    if (!date) return toast('Bitte Datum wählen');
+    try { const r = await store.createWorkout(date); showWorkout(r.id); } catch (e) { showError(e); }
+  };
+  app.querySelectorAll('.list-item').forEach(el => el.onclick = () => showWorkout(Number(el.dataset.id)));
+}
+
+async function showWorkout(id, push = true) {
+  if (state.workoutId !== id) state.open = new Set();
+  state.view = 'workout'; state.workoutId = id;
+  if (push && location.hash !== `#w${id}`) history.pushState(null, '', `#w${id}`);
+  let w, exercises;
+  try { [w, exercises] = await Promise.all([store.workout(id), store.exercises()]); } catch (e) { return showError(e); }
+  setHeader(fmtDate(w.date), true);
+
+  const setsBy = {};
+  for (const s of w.sets) (setsBy[s.exercise_id] ||= []).push(s);
+
+  app.innerHTML = exercises.map(ex => {
+    const cur = setsBy[ex.id] || [], prev = w.previous[ex.id];
+    const lastW = cur.length ? cur[cur.length - 1] : prev?.sets[prev.sets.length - 1];
+    const open = state.open.has(ex.id);
+    return `
+    <div class="card ex ${open ? 'open' : ''}" data-ex="${ex.id}">
+      <div class="ex-head">
+        <span class="name">${esc(ex.name)}</span>
+        ${cur.length ? `<span class="badge">${cur.length}</span>` : ''}
+        <span class="muted">${open ? '▾' : '▸'}</span>
+      </div>
+      <div class="ex-sum">${prev ? `Letztes Mal: ${esc(summarize(prev.sets))}` : 'Noch nie gemacht'}</div>
+      <div class="ex-body">
+        <div class="prev">
+          ${prev ? `<strong>Letztes Training (${fmtDate(prev.date)})</strong>
+            <div class="chips">${prev.sets.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}</span>`).join('')}</div>
+            ${!cur.length ? `<button class="ghost copy" style="margin-top:6px;padding-left:0">Sätze übernehmen</button>` : ''}`
+          : 'Diese Übung wurde noch nie erfasst.'}
+        </div>
+        <div><strong>Heute</strong></div>
+        <div class="chips">
+          ${cur.length ? cur.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}<button class="x" data-del="${s.id}" aria-label="Satz löschen">×</button></span>`).join('')
+            : '<span class="muted">Noch keine Sätze</span>'}
+        </div>
+        <div class="add-set">
+          <div><label>Gewicht (kg)</label><input class="w" inputmode="decimal" value="${lastW ? fmtW(lastW.weight) : ''}"></div>
+          <div><label>Wdh. (optional)</label><input class="r" inputmode="numeric" value="${lastW?.reps ?? ''}"></div>
+          <button class="primary add">+ Satz</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') + `
+    <h2>Neue Übung</h2>
+    <div class="card new-workout">
+      <div class="row"><input id="newEx" placeholder="Name der Übung" maxlength="100"><button class="primary" id="addEx">Hinzufügen</button></div>
+    </div>
+    <button class="danger" id="delWorkout" style="width:100%;margin-top:16px">Training löschen</button>`;
+
+  app.querySelectorAll('.ex').forEach(card => {
+    const exId = Number(card.dataset.ex);
+    $('.ex-head', card).onclick = () => {
+      card.classList.toggle('open');
+      card.classList.contains('open') ? state.open.add(exId) : state.open.delete(exId);
+      $('.ex-head .muted', card).textContent = card.classList.contains('open') ? '▾' : '▸';
+    };
+    $('.add', card).onclick = async () => {
+      const weight = parseNum($('.w', card).value), reps = parseNum($('.r', card).value);
+      if (weight === null || weight < 0) return toast('Bitte Gewicht eingeben');
+      try { await store.addSet(id, exId, weight, reps ? Math.round(reps) : null); state.open.add(exId); showWorkout(id, false); }
+      catch (e) { showError(e); }
+    };
+    const copy = $('.copy', card);
+    if (copy) copy.onclick = async () => {
+      try {
+        for (const s of w.previous[exId].sets) await store.addSet(id, exId, s.weight, s.reps);
+        state.open.add(exId); showWorkout(id, false);
+      } catch (e) { showError(e); }
+    };
+    card.querySelectorAll('[data-del]').forEach(b => b.onclick = async ev => {
+      ev.stopPropagation();
+      try { await store.deleteSet(Number(b.dataset.del)); showWorkout(id, false); } catch (e) { showError(e); }
+    });
+  });
+
+  $('#addEx').onclick = async () => {
+    const name = $('#newEx').value.trim();
+    if (!name) return;
+    try { const ex = await store.addExercise(name); state.open.add(ex.id); toast(`„${name}" hinzugefügt`); showWorkout(id, false); }
+    catch (e) { showError(e); }
+  };
+  $('#delWorkout').onclick = async () => {
+    if (!confirm('Dieses Training mit allen Sätzen löschen?')) return;
+    try { await store.deleteWorkout(id); showHome(); } catch (e) { showError(e); }
+  };
+}
+
+// ---------- Start ----------
+(async () => {
+  const r = await pickStore();
+  if (r === 'auth') return showLogin();
+  const id = Number(location.hash.replace('#w', '')) || null;
+  id ? showWorkout(id, false) : showHome(false);
+})();
+</script>
+</body>
+</html>
