@@ -27,7 +27,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
 } catch (PDOException $e) {
-    fail('Datenbankverbindung fehlgeschlagen', 500);
+    fail('Datenbankverbindung fehlgeschlagen' . (!empty($cfg['debug']) ? ': ' . $e->getMessage() : ''), 500);
 }
 
 $action = $_GET['action'] ?? '';
@@ -147,11 +147,12 @@ try {
             out(['id' => (int)$db->lastInsertId(), 'name' => $name]);
 
         case 'workouts':
+            // Unterabfragen statt GROUP BY: funktioniert auch mit sql_mode ONLY_FULL_GROUP_BY (z. B. MariaDB)
             $rows = $db->query(
-                'SELECT w.id, w.workout_date, w.note, COUNT(s.id) AS set_count,
-                        COUNT(DISTINCT s.exercise_id) AS exercise_count
-                 FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
-                 GROUP BY w.id ORDER BY w.workout_date DESC, w.id DESC LIMIT 200'
+                'SELECT w.id, w.workout_date, w.note,
+                        (SELECT COUNT(*) FROM sets s WHERE s.workout_id = w.id) AS set_count,
+                        (SELECT COUNT(DISTINCT s.exercise_id) FROM sets s WHERE s.workout_id = w.id) AS exercise_count
+                 FROM workouts w ORDER BY w.workout_date DESC, w.id DESC LIMIT 200'
             )->fetchAll();
             out(array_map(fn($r) => [
                 'id' => (int)$r['id'], 'date' => $r['workout_date'], 'note' => $r['note'],
@@ -229,5 +230,7 @@ try {
     }
 } catch (PDOException $e) {
     if ($db->inTransaction()) $db->rollBack();
-    fail('Datenbankfehler', 500);
+    $msg = $e->getMessage();
+    if (stripos($msg, "doesn't exist") !== false) fail('Datenbanktabellen fehlen – bitte schema.sql importieren', 500);
+    fail(!empty($cfg['debug']) ? "Datenbankfehler: $msg" : 'Datenbankfehler', 500);
 }

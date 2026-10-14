@@ -48,6 +48,13 @@ sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weigh
 
 Voraussetzungen: PHP 7.4 oder neuer mit `pdo_mysql`, MySQL 5.7+ oder MariaDB 10.3+.
 
+## Fehlersuche
+
+- **„Datenbankverbindung fehlgeschlagen“:** Zugangsdaten in `config.php` prüfen (Host, Datenbankname, Benutzer, Passwort). Bei manchen Hostern lautet der Host nicht `localhost`, sondern z. B. `127.0.0.1` oder ein eigener Servername.
+- **„Datenbanktabellen fehlen“:** `schema.sql` wurde noch nicht in die Datenbank importiert, die in `config.php` steht.
+- **„Datenbankfehler“:** In `config.php` vorübergehend `'debug' => true` setzen. Dann zeigt die App die genaue Meldung der Datenbank. Danach wieder auf `false` stellen.
+- Die App zeigt Fehler direkt auf der Seite und wechselt bei Datenbankproblemen nicht in den lokalen Modus. So gehen keine Einträge unbemerkt verloren.
+
 ## API
 
 | Aktion | Methode | Daten |

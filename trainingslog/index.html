@@ -138,7 +138,12 @@ const ApiStore = {
     });
     const data = await res.json().catch(() => ({ error: 'Ungültige Antwort' }));
     if (res.status === 401) { const err = new Error('auth'); err.auth = true; throw err; }
-    if (!res.ok || data.error) throw new Error(data.error || 'Fehler');
+    if (!res.ok || data.error) {
+      // Antwortet api.php mit einer JSON-Fehlermeldung, ist der Server da – nur die Datenbank hat ein Problem
+      const err = new Error(data.error || `Fehler ${res.status}`);
+      err.server = res.headers.get('content-type')?.includes('application/json') && !!data.error;
+      throw err;
+    }
     return data;
   },
   exercises(all = false) { return this.call('exercises', all ? { all: 1 } : {}); },
@@ -242,6 +247,7 @@ async function pickStore() {
     store = ApiStore;
   } catch (e) {
     if (e.auth) { store = ApiStore; return 'auth'; }
+    if (e.server) { store = ApiStore; return e; }
     store = LocalStore;
   }
 }
@@ -268,6 +274,17 @@ function setHeader(title, back) {
   $('#title').textContent = title;
   $('#backBtn').hidden = !back;
 }
+function showPageError(e) {
+  if (e.auth) return showLogin();
+  console.error(e);
+  app.innerHTML = `
+    <div class="card pad">
+      <strong>Die Daten konnten nicht geladen werden.</strong>
+      <p class="muted" style="margin:8px 0 12px">${esc(e.message || 'Unbekannter Fehler')}</p>
+      <button class="primary" id="retryBtn">Erneut versuchen</button>
+    </div>`;
+  $('#retryBtn').onclick = async () => { const r = await pickStore(); r instanceof Error ? showPageError(r) : r === 'auth' ? showLogin() : route(); };
+}
 function showError(e) {
   if (e.auth) return showLogin();
   toast(e.message || 'Fehler');
@@ -285,7 +302,7 @@ function showLogin() {
   $('#tokOk').onclick = async () => {
     try { localStorage.setItem('tl_token', $('#tok').value.trim()); } catch {}
     const r = await pickStore();
-    if (r === 'auth') toast('Code falsch'); else route();
+    if (r === 'auth') toast('Code falsch'); else if (r instanceof Error) showPageError(r); else route();
   };
 }
 
@@ -293,7 +310,7 @@ function showLogin() {
 async function showHome() {
   setHeader('Trainingslog', false);
   let workouts = [];
-  try { workouts = await store.workouts(); } catch (e) { return showError(e); }
+  try { workouts = await store.workouts(); } catch (e) { return showPageError(e); }
   app.innerHTML = `
     ${store.mode === 'local' ? '<div class="banner">Lokaler Modus: Daten werden nur in diesem Browser gespeichert. Mit api.php und MySQL werden sie zentral abgelegt.</div>' : ''}
     <div class="card pad">
@@ -330,7 +347,7 @@ async function showWorkout(id) {
   if (state.workoutId !== id) state.open = new Set();
   state.workoutId = id;
   let w, allEx;
-  try { [w, allEx] = await Promise.all([store.workout(id), store.exercises(true)]); } catch (e) { return showError(e); }
+  try { [w, allEx] = await Promise.all([store.workout(id), store.exercises(true)]); } catch (e) { return showPageError(e); }
   setHeader(fmtDate(w.date), true);
 
   const setsBy = {};
@@ -439,7 +456,7 @@ async function showWorkout(id) {
 async function showExercises() {
   setHeader('Übungen verwalten', true);
   let all;
-  try { all = await store.exercises(true); } catch (e) { return showError(e); }
+  try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
     <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. Mit den Pfeilen legen Sie die Reihenfolge fest, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
@@ -497,7 +514,7 @@ async function showExercises() {
 // ---------- Ansicht: Verlauf einer Übung ----------
 async function showHistory(exId) {
   let hist, all;
-  try { [hist, all] = await Promise.all([store.history(exId), store.exercises(true)]); } catch (e) { return showError(e); }
+  try { [hist, all] = await Promise.all([store.history(exId), store.exercises(true)]); } catch (e) { return showPageError(e); }
   const ex = all.find(e => e.id === exId);
   setHeader(ex ? ex.name : 'Verlauf', true);
   if (!hist.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine Sätze erfasst.</div>'; return; }
@@ -593,6 +610,7 @@ function drawChart(host, tip, points) {
 (async () => {
   const r = await pickStore();
   if (r === 'auth') return showLogin();
+  if (r instanceof Error) return showPageError(r);
   route();
 })();
 </script>

@@ -9,4 +9,6 @@ return [
     // Einfacher Zugriffsschutz: gleicher Wert wird beim ersten Öffnen der App abgefragt.
     // Leer lassen = kein Schutz (nur für lokale Tests empfohlen).
     'app_token' => 'BITTE_AENDERN',
+    // true = genaue Fehlermeldung der Datenbank anzeigen (nur zur Fehlersuche einschalten).
+    'debug' => false,
 ];
