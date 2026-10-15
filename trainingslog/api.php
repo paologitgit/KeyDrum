@@ -15,9 +15,12 @@ $cfgFile = __DIR__ . '/config.php';
 if (!is_file($cfgFile)) fail('config.php fehlt', 500);
 $cfg = require $cfgFile;
 
-if (!empty($cfg['app_token'])) {
-    $token = $_SERVER['HTTP_X_TOKEN'] ?? '';
-    if (!hash_equals((string)$cfg['app_token'], $token)) fail('Nicht autorisiert', 401);
+if (trim((string)($cfg['app_token'] ?? '')) !== '') {
+    // Code kommt als Header X-Token; manche Hoster filtern eigene Header, daher Ersatz über ?t=
+    $expected = trim((string)$cfg['app_token']);
+    $token = trim((string)($_SERVER['HTTP_X_TOKEN'] ?? $_GET['t'] ?? ''));
+    if ($token === '') out(['error' => 'Kein Zugangscode empfangen', 'reason' => 'missing'], 401);
+    if (!hash_equals($expected, $token)) out(['error' => 'Zugangscode falsch', 'reason' => 'wrong'], 401);
 }
 
 try {

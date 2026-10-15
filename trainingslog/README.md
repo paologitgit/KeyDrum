@@ -23,6 +23,7 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 | `api.php` | JSON-Schnittstelle zu MySQL (PDO mit vorbereiteten Abfragen) |
 | `schema.sql` | Tabellen und Grundübungen |
 | `config.sample.php` | Vorlage für die Zugangsdaten → als `config.php` kopieren |
+| `check.php` | Prüfseite für die Einrichtung (zeigt keine Passwörter); kann danach gelöscht werden |
 
 ## Datenmodell
 
@@ -49,6 +50,10 @@ sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weigh
 Voraussetzungen: PHP 7.4 oder neuer mit `pdo_mysql`, MySQL 5.7+ oder MariaDB 10.3+.
 
 ## Fehlersuche
+
+Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check.php`). Die Seite prüft PHP-Version, `config.php`, Zugangscode, Datenbankverbindung, Tabellen und die Weitergabe des Codes und zeigt bei jedem Punkt, was zu tun ist.
+
+- **Login klappt nicht:** Der Code muss genau dem Wert von `app_token` in `config.php` entsprechen (Groß-/Kleinschreibung). Mit „Code anzeigen“ lässt sich die Eingabe kontrollieren. Filtert der Server den Code heraus, weicht die App automatisch auf einen Ersatzweg aus.
 
 - **„Datenbankverbindung fehlgeschlagen“:** Zugangsdaten in `config.php` prüfen (Host, Datenbankname, Benutzer, Passwort). Bei manchen Hostern lautet der Host nicht `localhost`, sondern z. B. `127.0.0.1` oder ein eigener Servername.
 - **„Datenbanktabellen fehlen“:** `schema.sql` wurde noch nicht in die Datenbank importiert, die in `config.php` steht.

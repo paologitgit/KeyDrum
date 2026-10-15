@@ -1,0 +1,102 @@
+<?php
+// Trainingslog – Prüfseite für die Einrichtung.
+// Zeigt keine Passwörter oder Codes an. Nach erfolgreicher Prüfung darf die Datei gelöscht werden.
+// Bewusst in einfacher PHP-Syntax geschrieben, damit sie auch auf alten PHP-Versionen läuft.
+
+if (isset($_GET['header'])) {
+    // Test: kommt der Header X-Token beim Server an?
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('received' => isset($_SERVER['HTTP_X_TOKEN']) && $_SERVER['HTTP_X_TOKEN'] === 'test123'));
+    exit;
+}
+
+$checks = array();
+function check($label, $ok, $detail) {
+    global $checks;
+    $checks[] = array($label, $ok, $detail);
+}
+
+check('PHP-Version', version_compare(PHP_VERSION, '7.4.0', '>='),
+      PHP_VERSION . (version_compare(PHP_VERSION, '7.4.0', '>=') ? '' : ' – mindestens 7.4 nötig (in der Hosting-Verwaltung umstellen)'));
+check('PDO MySQL', extension_loaded('pdo_mysql'), extension_loaded('pdo_mysql') ? 'vorhanden' : 'fehlt – beim Hoster aktivieren');
+
+$cfgFile = dirname(__FILE__) . '/config.php';
+$cfg = null;
+if (!is_file($cfgFile)) {
+    check('config.php', false, 'nicht gefunden – config.sample.php als config.php speichern');
+} else {
+    $cfg = include $cfgFile;
+    if (!is_array($cfg)) {
+        check('config.php', false, 'kann nicht gelesen werden – Schreibweise prüfen (gerade Anführungszeichen \' verwenden, keine „typografischen“)');
+        $cfg = null;
+    } else {
+        check('config.php', true, 'gefunden');
+    }
+}
+
+if ($cfg) {
+    $tok = isset($cfg['app_token']) ? (string)$cfg['app_token'] : '';
+    if (trim($tok) === '') {
+        check('Zugangscode (app_token)', true, 'leer – die App fragt keinen Code ab');
+    } elseif (trim($tok) === 'BITTE_AENDERN') {
+        check('Zugangscode (app_token)', false, 'noch der Platzhalter BITTE_AENDERN – eigenen Code eintragen');
+    } else {
+        $d = 'gesetzt, ' . strlen(trim($tok)) . ' Zeichen';
+        if ($tok !== trim($tok)) $d .= ' (Leerzeichen am Anfang/Ende werden ignoriert)';
+        if (preg_match('/[^\x20-\x7E]/', $tok)) $d .= ' – enthält Umlaute oder Sonderzeichen; im Zweifel nur Buchstaben und Ziffern verwenden';
+        check('Zugangscode (app_token)', true, $d);
+    }
+
+    try {
+        $db = new PDO('mysql:host=' . $cfg['db_host'] . ';dbname=' . $cfg['db_name'] . ';charset=utf8mb4',
+                      $cfg['db_user'], $cfg['db_pass'], array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
+        check('Datenbankverbindung', true, 'Verbindung zu „' . htmlspecialchars($cfg['db_name']) . '“ ok');
+        foreach (array('exercises', 'workouts', 'sets') as $t) {
+            try {
+                $n = $db->query("SELECT COUNT(*) FROM `$t`")->fetchColumn();
+                check("Tabelle $t", true, "$n Einträge");
+            } catch (PDOException $e) {
+                check("Tabelle $t", false, 'fehlt – schema.sql importieren');
+            }
+        }
+    } catch (PDOException $e) {
+        check('Datenbankverbindung', false, 'fehlgeschlagen: ' . htmlspecialchars($e->getMessage()));
+    }
+}
+?><!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trainingslog – Prüfung</title>
+<style>
+  body { font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; background: #f4f5f7; color: #16191d; }
+  h1 { font-size: 19px; margin: 0 0 12px; }
+  .item { background: #fff; border: 1px solid #e3e5e8; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+  .ok::before { content: "✔ "; color: #1b7f3b; font-weight: 700; }
+  .bad::before { content: "✘ "; color: #c62828; font-weight: 700; }
+  .d { color: #555; font-size: 14px; margin-top: 2px; word-break: break-word; }
+  p { color: #555; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Trainingslog – Prüfung</h1>
+<?php foreach ($checks as $c): ?>
+  <div class="item"><strong class="<?php echo $c[1] ? 'ok' : 'bad'; ?>"><?php echo $c[0]; ?></strong>
+    <div class="d"><?php echo $c[2]; ?></div></div>
+<?php endforeach; ?>
+<div class="item"><strong id="h">Weitergabe des Zugangscodes</strong><div class="d" id="hd">wird geprüft …</div></div>
+<p>Diese Seite zeigt keine Passwörter an. Nach der Prüfung können Sie check.php vom Server löschen.</p>
+<script>
+fetch('check.php?header=1', { headers: { 'X-Token': 'test123' } })
+  .then(function (r) { return r.json(); })
+  .then(function (d) {
+    document.getElementById('h').className = 'ok';
+    document.getElementById('hd').textContent = d.received
+      ? 'ok – der Server empfängt den Code'
+      : 'der Server filtert den Code heraus – die App weicht automatisch auf einen Ersatzweg aus';
+  })
+  .catch(function () { document.getElementById('h').className = 'bad'; document.getElementById('hd').textContent = 'Test fehlgeschlagen'; });
+</script>
+</body>
+</html>

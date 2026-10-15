@@ -128,16 +128,32 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 // ---------- Speicher: MySQL über API oder lokal im Browser ----------
 const ApiStore = {
   mode: 'api',
-  token: () => { try { return localStorage.getItem('tl_token') || ''; } catch { return ''; } },
+  // Code auch im Speicher halten: im privaten Modus kann localStorage fehlen
+  _token: null,
+  token() {
+    if (this._token === null) { try { this._token = localStorage.getItem('tl_token') || ''; } catch { this._token = ''; } }
+    return this._token;
+  },
+  setToken(t) { this._token = t; try { localStorage.setItem('tl_token', t); } catch {} },
+  // Ersatzweg, falls der Server den Header X-Token nicht weiterreicht
+  useParam: (() => { try { return localStorage.getItem('tl_tparam') === '1'; } catch { return false; } })(),
   async call(action, params = {}, body) {
     const qs = new URLSearchParams({ action, ...params });
+    if (this.useParam && this.token()) qs.set('t', this.token());
     const res = await fetch(`${API_URL}?${qs}`, {
       method: body ? 'POST' : 'GET',
       headers: { 'Content-Type': 'application/json', 'X-Token': this.token() },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({ error: 'Ungültige Antwort' }));
-    if (res.status === 401) { const err = new Error('auth'); err.auth = true; throw err; }
+    if (res.status === 401) {
+      if (data.reason === 'missing' && this.token() && !this.useParam) {
+        this.useParam = true;
+        try { localStorage.setItem('tl_tparam', '1'); } catch {}
+        return this.call(action, params, body);
+      }
+      const err = new Error(data.error || 'Nicht autorisiert'); err.auth = true; err.reason = data.reason; throw err;
+    }
     if (!res.ok || data.error) {
       // Antwortet api.php mit einer JSON-Fehlermeldung, ist der Server da – nur die Datenbank hat ein Problem
       const err = new Error(data.error || `Fehler ${res.status}`);
@@ -246,7 +262,7 @@ async function pickStore() {
     await ApiStore.call('ping');
     store = ApiStore;
   } catch (e) {
-    if (e.auth) { store = ApiStore; return 'auth'; }
+    if (e.auth) { store = ApiStore; return e; }
     if (e.server) { store = ApiStore; return e; }
     store = LocalStore;
   }
@@ -275,7 +291,7 @@ function setHeader(title, back) {
   $('#backBtn').hidden = !back;
 }
 function showPageError(e) {
-  if (e.auth) return showLogin();
+  if (e.auth) return showLogin(e);
   console.error(e);
   app.innerHTML = `
     <div class="card pad">
@@ -283,27 +299,51 @@ function showPageError(e) {
       <p class="muted" style="margin:8px 0 12px">${esc(e.message || 'Unbekannter Fehler')}</p>
       <button class="primary" id="retryBtn">Erneut versuchen</button>
     </div>`;
-  $('#retryBtn').onclick = async () => { const r = await pickStore(); r instanceof Error ? showPageError(r) : r === 'auth' ? showLogin() : route(); };
+  $('#retryBtn').onclick = async () => { const r = await pickStore(); r?.auth ? showLogin(r) : r instanceof Error ? showPageError(r) : route(); };
 }
 function showError(e) {
-  if (e.auth) return showLogin();
+  if (e.auth) return showLogin(e);
   toast(e.message || 'Fehler');
   console.error(e);
 }
 
 // ---------- Ansicht: Zugangscode ----------
-function showLogin() {
+function showLogin(err) {
   setHeader('Trainingslog', false);
+  const hadToken = !!ApiStore.token();
+  let msg = '';
+  if (err && hadToken) {
+    msg = err.reason === 'missing'
+      ? 'Der Server empfängt den Code nicht. Bitte check.php aufrufen (siehe Anleitung).'
+      : 'Der Code stimmt nicht mit app_token in config.php überein. Groß-/Kleinschreibung beachten.';
+  }
   app.innerHTML = `
     <div class="card pad">
       <label for="tok">Zugangscode</label>
-      <div class="row"><input id="tok" type="password" autocomplete="current-password"><button class="primary" id="tokOk">OK</button></div>
+      <div class="row">
+        <input id="tok" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+        <button class="primary" id="tokOk">OK</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin:10px 0 0;color:var(--muted);font-size:14px">
+        <input type="checkbox" id="tokShow" style="width:auto;min-height:0"> Code anzeigen
+      </label>
+      <p id="tokMsg" class="muted" style="color:var(--danger);margin:10px 0 0;${msg ? '' : 'display:none'}">${esc(msg)}</p>
     </div>`;
-  $('#tokOk').onclick = async () => {
-    try { localStorage.setItem('tl_token', $('#tok').value.trim()); } catch {}
+  $('#tokShow').onchange = e => { $('#tok').type = e.target.checked ? 'text' : 'password'; };
+  const submit = async () => {
+    const code = $('#tok').value.trim();
+    if (!code) return;
+    ApiStore.setToken(code);
+    $('#tokOk').disabled = true;
     const r = await pickStore();
-    if (r === 'auth') toast('Code falsch'); else if (r instanceof Error) showPageError(r); else route();
+    $('#tokOk').disabled = false;
+    if (r?.auth) return showLogin(r);
+    if (r instanceof Error) return showPageError(r);
+    route();
   };
+  $('#tokOk').onclick = submit;
+  $('#tok').onkeydown = e => { if (e.key === 'Enter') submit(); };
+  $('#tok').focus();
 }
 
 // ---------- Ansicht: Start ----------
@@ -609,7 +649,7 @@ function drawChart(host, tip, points) {
 // ---------- Start ----------
 (async () => {
   const r = await pickStore();
-  if (r === 'auth') return showLogin();
+  if (r?.auth) return showLogin(r);
   if (r instanceof Error) return showPageError(r);
   route();
 })();
