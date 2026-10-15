@@ -57,6 +57,39 @@ $action = $_GET['action'] ?? '';
 $in = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
 $isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 
+/**
+ * Bestehende Datenbanken automatisch erweitern (Übungen mit Zeit statt Gewicht).
+ * Läuft nur, solange die Spalte noch fehlt.
+ */
+function ensureSchema(PDO $db): void {
+    try {
+        $has = $db->query("SHOW COLUMNS FROM exercises LIKE 'mode'")->fetch();
+    } catch (PDOException $e) {
+        return; // Tabellen fehlen – wird später mit klarer Meldung gemeldet
+    }
+    if ($has) return;
+    try {
+        $db->exec("ALTER TABLE exercises ADD COLUMN mode VARCHAR(10) NOT NULL DEFAULT 'weight' AFTER name");
+        $db->exec('ALTER TABLE sets MODIFY weight_kg DECIMAL(6,2) NULL, ADD COLUMN duration_s INT UNSIGNED NULL AFTER reps');
+    } catch (PDOException $e) {
+        fail('Die Datenbank konnte nicht automatisch erweitert werden. Bitte migrate_zeit.sql importieren.', 500);
+    }
+}
+ensureSchema($db);
+
+/** Einheitliches Format für einen Satz (Gewicht und/oder Zeit). */
+function setRow(array $r): array {
+    return [
+        'weight'   => $r['weight_kg'] === null ? null : (float)$r['weight_kg'],
+        'reps'     => $r['reps'] === null ? null : (int)$r['reps'],
+        'duration' => $r['duration_s'] === null ? null : (int)$r['duration_s'],
+    ];
+}
+
+function modeParam(array $src): string {
+    return ($src['mode'] ?? 'weight') === 'time' ? 'time' : 'weight';
+}
+
 function intParam(array $src, string $key): int {
     if (!isset($src[$key]) || !is_numeric($src[$key])) fail("Parameter '$key' fehlt");
     return (int)$src[$key];
@@ -70,7 +103,7 @@ function previousSets(PDO $db, int $workoutId): array {
     if ($date === false) fail('Training nicht gefunden', 404);
 
     // Pro Übung: das jüngste frühere Training, in dem sie vorkam.
-    $sql = "SELECT s.exercise_id, w.id AS workout_id, w.workout_date, s.set_no, s.weight_kg, s.reps
+    $sql = "SELECT s.exercise_id, w.id AS workout_id, w.workout_date, s.set_no, s.weight_kg, s.reps, s.duration_s
             FROM sets s
             JOIN workouts w ON w.id = s.workout_id
             WHERE w.id = (
@@ -85,14 +118,14 @@ function previousSets(PDO $db, int $workoutId): array {
     foreach ($st as $r) {
         $eid = (int)$r['exercise_id'];
         $res[$eid] ??= ['date' => $r['workout_date'], 'sets' => []];
-        $res[$eid]['sets'][] = ['weight' => (float)$r['weight_kg'], 'reps' => $r['reps'] === null ? null : (int)$r['reps']];
+        $res[$eid]['sets'][] = setRow($r);
     }
     return $res;
 }
 
-/** Bisheriges Höchstgewicht je Übung aus allen Trainings vor dem angegebenen Training. */
+/** Bisheriges Höchstgewicht und längste Zeit je Übung aus allen Trainings vor dem angegebenen Training. */
 function previousBest(PDO $db, int $workoutId): array {
-    $st = $db->prepare('SELECT s.exercise_id, MAX(s.weight_kg) AS best
+    $st = $db->prepare('SELECT s.exercise_id, MAX(s.weight_kg) AS best_w, MAX(s.duration_s) AS best_d
                         FROM sets s JOIN workouts w ON w.id = s.workout_id
                         JOIN workouts cur ON cur.id = :id
                         WHERE w.workout_date < cur.workout_date
@@ -100,7 +133,10 @@ function previousBest(PDO $db, int $workoutId): array {
                         GROUP BY s.exercise_id');
     $st->execute([':id' => $workoutId]);
     $res = [];
-    foreach ($st as $r) $res[(int)$r['exercise_id']] = (float)$r['best'];
+    foreach ($st as $r) $res[(int)$r['exercise_id']] = [
+        'weight'   => $r['best_w'] === null ? null : (float)$r['best_w'],
+        'duration' => $r['best_d'] === null ? null : (int)$r['best_d'],
+    ];
     return $res;
 }
 
@@ -111,8 +147,8 @@ try {
 
         case 'exercises':
             $where = empty($_GET['all']) ? 'WHERE active = 1' : '';
-            $rows = $db->query("SELECT id, name, active FROM exercises $where ORDER BY sort_order, name")->fetchAll();
-            out(array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'active' => (bool)$r['active']], $rows));
+            $rows = $db->query("SELECT id, name, mode, active FROM exercises $where ORDER BY sort_order, name")->fetchAll();
+            out(array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'mode' => $r['mode'], 'active' => (bool)$r['active']], $rows));
 
         case 'exercise_update':
             if (!$isPost) fail('POST erforderlich', 405);
@@ -128,6 +164,9 @@ try {
             if (array_key_exists('active', $in)) {
                 $db->prepare('UPDATE exercises SET active = ? WHERE id = ?')->execute([$in['active'] ? 1 : 0, $id]);
             }
+            if (array_key_exists('mode', $in)) {
+                $db->prepare('UPDATE exercises SET mode = ? WHERE id = ?')->execute([modeParam($in), $id]);
+            }
             out(['ok' => true]);
 
         case 'exercise_reorder':
@@ -142,7 +181,7 @@ try {
 
         case 'history':
             $eid = intParam($_GET, 'exercise_id');
-            $st = $db->prepare('SELECT w.id AS workout_id, w.workout_date, s.weight_kg, s.reps
+            $st = $db->prepare('SELECT w.id AS workout_id, w.workout_date, s.weight_kg, s.reps, s.duration_s
                                 FROM sets s JOIN workouts w ON w.id = s.workout_id
                                 WHERE s.exercise_id = ?
                                 ORDER BY w.workout_date, w.id, s.set_no');
@@ -151,7 +190,7 @@ try {
             foreach ($st as $r) {
                 $wid = (int)$r['workout_id'];
                 $res[$wid] ??= ['workout_id' => $wid, 'date' => $r['workout_date'], 'sets' => []];
-                $res[$wid]['sets'][] = ['weight' => (float)$r['weight_kg'], 'reps' => $r['reps'] === null ? null : (int)$r['reps']];
+                $res[$wid]['sets'][] = setRow($r);
             }
             out(array_values($res));
 
@@ -159,15 +198,16 @@ try {
             if (!$isPost) fail('POST erforderlich', 405);
             $name = trim((string)($in['name'] ?? ''));
             if ($name === '' || textLength($name) > 100) fail('Ungültiger Name');
-            $ex = $db->prepare('SELECT id, active FROM exercises WHERE name = ?');
+            $mode = modeParam($in);
+            $ex = $db->prepare('SELECT id, mode FROM exercises WHERE name = ?');
             $ex->execute([$name]);
             if ($row = $ex->fetch()) {
                 $db->prepare('UPDATE exercises SET active = 1 WHERE id = ?')->execute([$row['id']]);
-                out(['id' => (int)$row['id'], 'name' => $name]);
+                out(['id' => (int)$row['id'], 'name' => $name, 'mode' => $row['mode']]);
             }
             $max = (int)$db->query('SELECT COALESCE(MAX(sort_order), 0) FROM exercises')->fetchColumn();
-            $db->prepare('INSERT INTO exercises (name, sort_order) VALUES (?, ?)')->execute([$name, $max + 10]);
-            out(['id' => (int)$db->lastInsertId(), 'name' => $name]);
+            $db->prepare('INSERT INTO exercises (name, mode, sort_order) VALUES (?, ?, ?)')->execute([$name, $mode, $max + 10]);
+            out(['id' => (int)$db->lastInsertId(), 'name' => $name, 'mode' => $mode]);
 
         case 'workouts':
             // Unterabfragen statt GROUP BY: funktioniert auch mit sql_mode ONLY_FULL_GROUP_BY (z. B. MariaDB)
@@ -196,12 +236,11 @@ try {
             $w->execute([$id]);
             $wk = $w->fetch();
             if (!$wk) fail('Training nicht gefunden', 404);
-            $st = $db->prepare('SELECT id, exercise_id, set_no, weight_kg, reps FROM sets WHERE workout_id = ? ORDER BY exercise_id, set_no');
+            $st = $db->prepare('SELECT id, exercise_id, set_no, weight_kg, reps, duration_s FROM sets WHERE workout_id = ? ORDER BY exercise_id, set_no');
             $st->execute([$id]);
             $sets = array_map(fn($r) => [
                 'id' => (int)$r['id'], 'exercise_id' => (int)$r['exercise_id'], 'set_no' => (int)$r['set_no'],
-                'weight' => (float)$r['weight_kg'], 'reps' => $r['reps'] === null ? null : (int)$r['reps'],
-            ], $st->fetchAll());
+            ] + setRow($r), $st->fetchAll());
             out([
                 'id' => (int)$wk['id'], 'date' => $wk['workout_date'], 'note' => $wk['note'],
                 'sets' => $sets, 'previous' => (object)previousSets($db, $id),
@@ -231,14 +270,19 @@ try {
             if (!$isPost) fail('POST erforderlich', 405);
             $wid = intParam($in, 'workout_id');
             $eid = intParam($in, 'exercise_id');
-            if (!isset($in['weight']) || !is_numeric($in['weight']) || $in['weight'] < 0 || $in['weight'] > 9999) fail('Ungültiges Gewicht');
-            $reps = (isset($in['reps']) && $in['reps'] !== '' && $in['reps'] !== null) ? (int)$in['reps'] : null;
+            $has = fn($k) => isset($in[$k]) && $in[$k] !== '' && $in[$k] !== null;
+            $weight = $has('weight') ? $in['weight'] : null;
+            $duration = $has('duration') ? $in['duration'] : null;
+            if ($weight === null && $duration === null) fail('Bitte Gewicht oder Zeit angeben');
+            if ($weight !== null && (!is_numeric($weight) || $weight < 0 || $weight > 9999)) fail('Ungültiges Gewicht');
+            if ($duration !== null && (!is_numeric($duration) || $duration <= 0 || $duration > 86400)) fail('Ungültige Zeit');
+            $reps = $has('reps') ? (int)$in['reps'] : null;
             $db->beginTransaction();
             $n = $db->prepare('SELECT COALESCE(MAX(set_no), 0) + 1 FROM sets WHERE workout_id = ? AND exercise_id = ? FOR UPDATE');
             $n->execute([$wid, $eid]);
             $setNo = (int)$n->fetchColumn();
-            $db->prepare('INSERT INTO sets (workout_id, exercise_id, set_no, weight_kg, reps) VALUES (?, ?, ?, ?, ?)')
-               ->execute([$wid, $eid, $setNo, (float)$in['weight'], $reps]);
+            $db->prepare('INSERT INTO sets (workout_id, exercise_id, set_no, weight_kg, reps, duration_s) VALUES (?, ?, ?, ?, ?, ?)')
+               ->execute([$wid, $eid, $setNo, $weight === null ? null : (float)$weight, $reps, $duration === null ? null : (int)$duration]);
             $id = (int)$db->lastInsertId();
             $db->commit();
             out(['id' => $id, 'set_no' => $setNo]);

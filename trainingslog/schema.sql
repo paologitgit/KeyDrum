@@ -6,6 +6,7 @@ SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS exercises (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name        VARCHAR(100) NOT NULL,
+  mode        VARCHAR(10) NOT NULL DEFAULT 'weight',   -- 'weight' = kg × Wdh., 'time' = Dauer
   sort_order  INT NOT NULL DEFAULT 0,
   active      TINYINT(1) NOT NULL DEFAULT 1,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -25,8 +26,9 @@ CREATE TABLE IF NOT EXISTS sets (
   workout_id   INT UNSIGNED NOT NULL,
   exercise_id  INT UNSIGNED NOT NULL,
   set_no       SMALLINT UNSIGNED NOT NULL,
-  weight_kg    DECIMAL(6,2) NOT NULL,
+  weight_kg    DECIMAL(6,2) NULL,
   reps         SMALLINT UNSIGNED NULL,
+  duration_s   INT UNSIGNED NULL,
   created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_sets_exercise (exercise_id, workout_id),
   CONSTRAINT fk_sets_workout  FOREIGN KEY (workout_id)  REFERENCES workouts(id)  ON DELETE CASCADE,

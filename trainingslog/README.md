@@ -8,11 +8,11 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Übungen:** Die Liste ist zu Beginn mit diesen Übungen gefüllt: Deadlift, Latzug, Sitting Row, Pull-up, Bankdrücken, Bizeps, Schulter seitlich, Rücken, Butterfly reverse.
 - **Sätze erfassen:** Gewicht (Komma oder Punkt), Wiederholungen optional, dann „+ Satz“. Das Gewicht vom letzten Satz ist bereits eingetragen.
 - **Letztes Training:** Jede Übung zeigt die Sätze aus dem letzten Training, in dem sie vorkam. Mit „Sätze übernehmen“ wird alles auf einmal kopiert.
-- **Neue Übungen** lassen sich während des Trainings unten auf der Seite hinzufügen.
-- **Übungen verwalten** (Startseite): umbenennen, Reihenfolge mit ↑/↓ ändern, ausblenden und wieder einblenden. Ausgeblendete Übungen behalten ihren Verlauf.
+- **Neue Übungen** lassen sich während des Trainings unten auf der Seite hinzufügen. Dabei wählen Sie, ob die Übung mit **Gewicht** (kg × Wiederholungen) oder mit **Zeit** (Minuten und Sekunden, z. B. Plank) erfasst wird.
+- **Übungen verwalten** (Startseite): umbenennen, zwischen Gewicht und Zeit wechseln, Reihenfolge mit ↑/↓ ändern, ausblenden und wieder einblenden. Ausgeblendete Übungen behalten ihren Verlauf.
 - **Notiz und Datum** pro Training lassen sich oben im Training bearbeiten. Die Notiz erscheint auch in der Trainingsliste.
-- **Bestwerte:** Ein Satz, der schwerer ist als alles bisher Erfasste, wird mit ★ markiert. Ihr bisheriger Bestwert wird angezeigt.
-- **Verlauf** (in jeder Übung über „Verlauf ›“): Bestwert, Anzahl Trainings, Diagramm des Höchstgewichts pro Training (Punkt antippen zeigt die Werte) und eine Liste aller Trainings.
+- **Bestwerte:** Ein Satz, der schwerer (bei Zeit-Übungen: länger) ist als alles bisher Erfasste, wird mit ★ markiert. Ihr bisheriger Bestwert wird angezeigt.
+- **Verlauf** (in jeder Übung über „Verlauf ›“): Bestwert, Anzahl Trainings, Diagramm des Höchstgewichts bzw. der längsten Zeit pro Training (Punkt antippen zeigt die Werte) und eine Liste aller Trainings.
 - **Ohne Server:** Ohne erreichbare `api.php` arbeitet die App im lokalen Modus (Speicherung im Browser), damit sie sich sofort ausprobieren lässt.
 
 ## Dateien
@@ -23,18 +23,20 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 | `api.php` | JSON-Schnittstelle zu MySQL (PDO mit vorbereiteten Abfragen) |
 | `schema.sql` | Tabellen und Grundübungen |
 | `config.sample.php` | Vorlage für die Zugangsdaten → als `config.php` kopieren |
+| `migrate_zeit.sql` | Nur nötig, falls `api.php` eine bestehende Datenbank nicht selbst um die Zeit-Erfassung erweitern darf |
 | `check.php` | Prüfseite für die Einrichtung (zeigt keine Passwörter); kann danach gelöscht werden |
 
 ## Datenmodell
 
 ```
-exercises (id, name UNIQUE, sort_order, active)
+exercises (id, name UNIQUE, mode 'weight'|'time', sort_order, active)
 workouts  (id, workout_date, note)
-sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg, reps NULL)
+sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg NULL, reps NULL, duration_s NULL)
 ```
 
 - Ein Training (`workouts`) hat beliebig viele Sätze (`sets`).
-- Jeder Satz gehört zu einer Übung und hat eine Nummer, ein Gewicht und optional Wiederholungen.
+- Jeder Satz gehört zu einer Übung und hat eine Nummer und – je nach Übung – ein Gewicht mit optionalen Wiederholungen oder eine Dauer in Sekunden.
+- Bestehende Datenbanken erweitert `api.php` beim ersten Aufruf automatisch um die Zeit-Erfassung.
 - „Letztes Mal“ = das jüngste frühere Training, das diese Übung enthält. Lässt man eine Übung einmal aus, erscheint trotzdem der letzte tatsächliche Wert.
 - Wenn ein Training gelöscht wird, werden seine Sätze mitgelöscht. Übungen werden nie gelöscht, sondern nur deaktiviert (`active = 0`); so bleibt der Verlauf erhalten.
 
@@ -66,8 +68,8 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 |---|---|---|
 | `ping` | GET | – |
 | `exercises` | GET | `&all=1` gibt auch ausgeblendete Übungen zurück |
-| `exercise_add` | POST | `{name}` |
-| `exercise_update` | POST | `{id, name?, active?}` |
+| `exercise_add` | POST | `{name, mode?: "weight"\|"time"}` |
+| `exercise_update` | POST | `{id, name?, active?, mode?}` |
 | `exercise_reorder` | POST | `{ids: [..]}` in gewünschter Reihenfolge |
 | `history&exercise_id=` | GET | alle Trainings mit Sätzen dieser Übung |
 | `workouts` | GET | – |
@@ -75,7 +77,7 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `workout&id=` | GET | Training mit Sätzen, `previous` (letzte Werte je Übung) und `best` (bisheriger Bestwert je Übung) |
 | `workout_update` | POST | `{id, note?, date?}` |
 | `workout_delete` | POST | `{id}` |
-| `set_add` | POST | `{workout_id, exercise_id, weight, reps?}` |
+| `set_add` | POST | `{workout_id, exercise_id, weight?, reps?, duration?}` (Gewicht oder Dauer in Sekunden) |
 | `set_delete` | POST | `{id}` |
 
 Bei jeder Anfrage wird der Header `X-Token` mitgeschickt (aus `config.php`).

@@ -68,9 +68,18 @@
   .add-set label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
   .add-set button { align-self: end; }
   .ex-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; gap: 3px; margin-top: 10px; }
+  .seg label { margin: 0; }
+  .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .seg span { display: block; padding: 8px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; color: var(--muted); }
+  .seg input:checked + span { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); }
+  .mng .nm { grid-column: 1 / -1; }
+  .mng .mode-btn { font-size: 14px; padding: 8px 12px; grid-column: 1; }
+  .mng .up { grid-column: 3; }
   .empty { padding: 18px 16px; color: var(--muted); }
   /* Übungsverwaltung */
-  .mng { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .mng { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 6px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); }
   .mng:first-child { border-top: 0; }
   .mng button { padding: 8px 10px; min-width: 44px; }
   .mng .hide-btn { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
@@ -111,9 +120,25 @@ const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getT
 const fmtDate = iso => { const [y, m, d] = iso.split('-'); const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(+y, m - 1, +d).getDay()]; return `${wd}, ${d}.${m}.${y}`; };
 const fmtShort = iso => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
 const fmtW = w => (Math.round(w * 100) / 100).toString().replace('.', ',');
-const fmtSet = s => s.reps ? `${fmtW(s.weight)} kg × ${s.reps}` : `${fmtW(s.weight)} kg`;
+// Zeit: 45 → "45 s", 90 → "1:30 min"
+const fmtDur = sec => { const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}:${String(r).padStart(2, '0')} min` : `${r} s`; };
+const fmtSet = s => {
+  if (s.duration != null) return (s.weight ? `${fmtW(s.weight)} kg · ` : '') + fmtDur(s.duration);
+  return s.reps ? `${fmtW(s.weight)} kg × ${s.reps}` : `${fmtW(s.weight)} kg`;
+};
+// Übungsart: 'weight' (kg × Wdh.) oder 'time' (Dauer). Kennzahl für Bestwert und Diagramm.
+const metricKey = mode => mode === 'time' ? 'duration' : 'weight';
+const fmtMetric = (mode, v) => mode === 'time' ? fmtDur(v) : `${fmtW(v)} kg`;
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
-const maxWeight = sets => Math.max(...sets.map(s => s.weight));
+const bestOf = (mode, sets) => Math.max(...sets.map(s => s[metricKey(mode)] ?? -Infinity));
+// Auswahl beim Anlegen einer Übung: Gewicht oder Zeit
+const modePicker = name => `
+  <div class="seg" role="radiogroup" aria-label="Erfassen mit">
+    <label><input type="radio" name="${name}" value="weight" checked><span>Gewicht (kg × Wdh.)</span></label>
+    <label><input type="radio" name="${name}" value="time"><span>Zeit</span></label>
+  </div>`;
+const pickedMode = name => document.querySelector(`input[name="${name}"]:checked`)?.value || 'weight';
+
 function summarize(sets) {
   // "3 × 60 kg · 1 × 65 kg" – aufeinanderfolgende gleiche Sätze zusammenfassen
   const groups = [];
@@ -164,7 +189,7 @@ const ApiStore = {
     return data;
   },
   exercises(all = false) { return this.call('exercises', all ? { all: 1 } : {}); },
-  addExercise(name) { return this.call('exercise_add', {}, { name }); },
+  addExercise(name, mode = 'weight') { return this.call('exercise_add', {}, { name, mode }); },
   updateExercise(id, fields) { return this.call('exercise_update', {}, { id, ...fields }); },
   reorderExercises(ids) { return this.call('exercise_reorder', {}, { ids }); },
   history(exercise_id) { return this.call('history', { exercise_id }); },
@@ -173,7 +198,7 @@ const ApiStore = {
   workout(id) { return this.call('workout', { id }); },
   updateWorkout(id, fields) { return this.call('workout_update', {}, { id, ...fields }); },
   deleteWorkout(id) { return this.call('workout_delete', {}, { id }); },
-  addSet(workout_id, exercise_id, weight, reps) { return this.call('set_add', {}, { workout_id, exercise_id, weight, reps }); },
+  addSet(workout_id, exercise_id, weight, reps, duration = null) { return this.call('set_add', {}, { workout_id, exercise_id, weight, reps, duration }); },
   deleteSet(id) { return this.call('set_delete', {}, { id }); },
 };
 
@@ -184,17 +209,17 @@ const LocalStore = {
     try { db = JSON.parse(localStorage.getItem('tl_db')); } catch {}
     if (!db) db = { seq: 0, exercises: DEFAULT_EXERCISES.map((name, i) => ({ id: i + 1, name })), workouts: [], sets: [] };
     if (!db.seq) db.seq = 1000;
-    for (const e of db.exercises) if (e.active === undefined) e.active = true;
+    for (const e of db.exercises) { if (e.active === undefined) e.active = true; if (!e.mode) e.mode = 'weight'; }
     return db;
   },
   save(db) { try { localStorage.setItem('tl_db', JSON.stringify(db)); } catch {} },
   byDate: (a, b) => a.date.localeCompare(b.date) || a.id - b.id,
   async exercises(all = false) { return this.load().exercises.filter(e => all || e.active); },
-  async addExercise(name) {
+  async addExercise(name, mode = 'weight') {
     const db = this.load();
     const ex = db.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
     if (ex) { ex.active = true; this.save(db); return ex; }
-    const e = { id: ++db.seq, name, active: true }; db.exercises.push(e); this.save(db); return e;
+    const e = { id: ++db.seq, name, mode, active: true }; db.exercises.push(e); this.save(db); return e;
   },
   async updateExercise(id, fields) {
     const db = this.load(), ex = db.exercises.find(e => e.id === id);
@@ -203,6 +228,7 @@ const LocalStore = {
       ex.name = fields.name;
     }
     if ('active' in fields) ex.active = !!fields.active;
+    if ('mode' in fields) ex.mode = fields.mode === 'time' ? 'time' : 'weight';
     this.save(db);
   },
   async reorderExercises(ids) {
@@ -214,7 +240,7 @@ const LocalStore = {
     const db = this.load();
     return db.workouts.slice().sort(this.byDate).map(w => ({
       workout_id: w.id, date: w.date,
-      sets: db.sets.filter(s => s.workout_id === w.id && s.exercise_id === exercise_id).sort((a, b) => a.set_no - b.set_no).map(s => ({ weight: s.weight, reps: s.reps })),
+      sets: db.sets.filter(s => s.workout_id === w.id && s.exercise_id === exercise_id).sort((a, b) => a.set_no - b.set_no).map(s => ({ weight: s.weight, reps: s.reps, duration: s.duration ?? null })),
     })).filter(h => h.sets.length);
   },
   async workouts() {
@@ -235,10 +261,11 @@ const LocalStore = {
     for (const ex of db.exercises) {
       for (const pw of earlier) {
         const s = db.sets.filter(x => x.workout_id === pw.id && x.exercise_id === ex.id).sort((a, b) => a.set_no - b.set_no);
-        if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps })) }; break; }
+        if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps, duration: x.duration ?? null })) }; break; }
       }
-      const ws = db.sets.filter(x => x.exercise_id === ex.id && earlierIds.has(x.workout_id)).map(x => x.weight);
-      if (ws.length) best[ex.id] = Math.max(...ws);
+      const es = db.sets.filter(x => x.exercise_id === ex.id && earlierIds.has(x.workout_id));
+      const maxOf = k => { const v = es.map(x => x[k]).filter(v => v != null); return v.length ? Math.max(...v) : null; };
+      if (es.length) best[ex.id] = { weight: maxOf('weight'), duration: maxOf('duration') };
     }
     return { ...w, sets: db.sets.filter(x => x.workout_id === id).sort((a, b) => a.set_no - b.set_no), previous, best };
   },
@@ -249,10 +276,10 @@ const LocalStore = {
     this.save(db);
   },
   async deleteWorkout(id) { const db = this.load(); db.workouts = db.workouts.filter(w => w.id !== id); db.sets = db.sets.filter(s => s.workout_id !== id); this.save(db); },
-  async addSet(workout_id, exercise_id, weight, reps) {
+  async addSet(workout_id, exercise_id, weight, reps, duration = null) {
     const db = this.load();
     const set_no = db.sets.filter(s => s.workout_id === workout_id && s.exercise_id === exercise_id).reduce((m, s) => Math.max(m, s.set_no), 0) + 1;
-    const s = { id: ++db.seq, workout_id, exercise_id, set_no, weight, reps }; db.sets.push(s); this.save(db); return s;
+    const s = { id: ++db.seq, workout_id, exercise_id, set_no, weight, reps, duration }; db.sets.push(s); this.save(db); return s;
   },
   async deleteSet(id) { const db = this.load(); db.sets = db.sets.filter(s => s.id !== id); this.save(db); },
 };
@@ -395,7 +422,10 @@ async function showWorkout(id) {
   for (const s of w.sets) (setsBy[s.exercise_id] ||= []).push(s);
   // Ausgeblendete Übungen nur zeigen, wenn sie in diesem Training Sätze haben
   const exercises = allEx.filter(ex => ex.active || setsBy[ex.id]);
-  const isPr = (exId, weight) => w.best[exId] !== undefined && weight > w.best[exId];
+  const modeOf = {};
+  for (const ex of allEx) modeOf[ex.id] = ex.mode || 'weight';
+  const bestVal = exId => w.best[exId]?.[metricKey(modeOf[exId])] ?? null;
+  const isPr = (exId, set) => { const b = bestVal(exId), v = set[metricKey(modeOf[exId])]; return b !== null && v != null && v > b; };
 
   app.innerHTML = `
     <div class="card pad">
@@ -405,7 +435,9 @@ async function showWorkout(id) {
     const cur = setsBy[ex.id] || [], prev = w.previous[ex.id];
     const lastW = cur.length ? cur[cur.length - 1] : prev?.sets[prev.sets.length - 1];
     const open = state.open.has(ex.id);
-    const hasPr = cur.some(s => isPr(ex.id, s.weight));
+    const hasPr = cur.some(s => isPr(ex.id, s));
+    const timeMode = modeOf[ex.id] === 'time';
+    const lastDur = lastW?.duration ?? null;
     return `
     <div class="card ex ${open ? 'open' : ''}" data-ex="${ex.id}">
       <div class="ex-head">
@@ -421,18 +453,24 @@ async function showWorkout(id) {
             <div class="chips">${prev.sets.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}</span>`).join('')}</div>
             ${!cur.length ? `<button class="ghost copy" style="margin-top:6px;padding-left:0">Sätze übernehmen</button>` : ''}`
           : 'Diese Übung wurde noch nie erfasst.'}
-          ${w.best[ex.id] !== undefined ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtW(w.best[ex.id])} kg</div>` : ''}
+          ${bestVal(ex.id) !== null ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtMetric(modeOf[ex.id], bestVal(ex.id))}</div>` : ''}
         </div>
         <div><strong>Heute</strong></div>
         <div class="chips">
-          ${cur.length ? cur.map((s, i) => `<span class="chip ${isPr(ex.id, s.weight) ? 'pr' : ''}">${isPr(ex.id, s.weight) ? '★ ' : ''}${i + 1}. ${fmtSet(s)}<button class="x" data-del="${s.id}" aria-label="Satz löschen">×</button></span>`).join('')
+          ${cur.length ? cur.map((s, i) => `<span class="chip ${isPr(ex.id, s) ? 'pr' : ''}">${isPr(ex.id, s) ? '★ ' : ''}${i + 1}. ${fmtSet(s)}<button class="x" data-del="${s.id}" aria-label="Satz löschen">×</button></span>`).join('')
             : '<span class="muted">Noch keine Sätze</span>'}
         </div>
+        ${timeMode ? `
         <div class="add-set">
-          <div><label>Gewicht (kg)</label><input class="w" inputmode="decimal" value="${lastW ? fmtW(lastW.weight) : ''}"></div>
+          <div><label>Minuten</label><input class="mi" inputmode="numeric" value="${lastDur !== null ? Math.floor(lastDur / 60) : ''}" placeholder="0"></div>
+          <div><label>Sekunden</label><input class="se" inputmode="numeric" value="${lastDur !== null ? lastDur % 60 : ''}" placeholder="0"></div>
+          <button class="primary add">+ Satz</button>
+        </div>` : `
+        <div class="add-set">
+          <div><label>Gewicht (kg)</label><input class="w" inputmode="decimal" value="${lastW?.weight != null ? fmtW(lastW.weight) : ''}"></div>
           <div><label>Wdh. (optional)</label><input class="r" inputmode="numeric" value="${lastW?.reps ?? ''}"></div>
           <button class="primary add">+ Satz</button>
-        </div>
+        </div>`}
         <div class="ex-foot"><button class="ghost hist">Verlauf ›</button></div>
       </div>
     </div>`;
@@ -440,6 +478,7 @@ async function showWorkout(id) {
     <h2>Neue Übung</h2>
     <div class="card pad">
       <div class="row"><input id="newEx" placeholder="Name der Übung" maxlength="100"><button class="primary" id="addEx">Hinzufügen</button></div>
+      ${modePicker('newExMode')}
     </div>
     <button class="danger" id="delWorkout" style="width:100%;margin-top:16px">Training löschen</button>`;
 
@@ -459,11 +498,20 @@ async function showWorkout(id) {
       $('.arrow', card).textContent = open ? '▾' : '▸';
     };
     $('.add', card).onclick = async () => {
-      const weight = parseNum($('.w', card).value), reps = parseNum($('.r', card).value);
-      if (weight === null || weight < 0) return toast('Bitte Gewicht eingeben');
+      let set;
+      if (modeOf[exId] === 'time') {
+        const mi = parseNum($('.mi', card).value) || 0, se = parseNum($('.se', card).value) || 0;
+        const duration = Math.round(mi * 60 + se);
+        if (mi < 0 || se < 0 || duration <= 0) return toast('Bitte Zeit eingeben');
+        set = { weight: null, reps: null, duration };
+      } else {
+        const weight = parseNum($('.w', card).value), reps = parseNum($('.r', card).value);
+        if (weight === null || weight < 0) return toast('Bitte Gewicht eingeben');
+        set = { weight, reps: reps ? Math.round(reps) : null, duration: null };
+      }
       try {
-        await store.addSet(id, exId, weight, reps ? Math.round(reps) : null);
-        if (isPr(exId, weight)) toast('Neuer Bestwert!');
+        await store.addSet(id, exId, set.weight, set.reps, set.duration);
+        if (isPr(exId, set)) toast('Neuer Bestwert!');
         state.open.add(exId); showWorkout(id);
       } catch (e) { showError(e); }
     };
@@ -471,7 +519,7 @@ async function showWorkout(id) {
     const copy = $('.copy', card);
     if (copy) copy.onclick = async () => {
       try {
-        for (const s of w.previous[exId].sets) await store.addSet(id, exId, s.weight, s.reps);
+        for (const s of w.previous[exId].sets) await store.addSet(id, exId, s.weight, s.reps, s.duration ?? null);
         state.open.add(exId); showWorkout(id);
       } catch (e) { showError(e); }
     };
@@ -484,7 +532,7 @@ async function showWorkout(id) {
   $('#addEx').onclick = async () => {
     const name = $('#newEx').value.trim();
     if (!name) return;
-    try { const ex = await store.addExercise(name); state.open.add(ex.id); toast(`„${name}“ hinzugefügt`); showWorkout(id); }
+    try { const ex = await store.addExercise(name, pickedMode('newExMode')); state.open.add(ex.id); toast(`„${name}“ hinzugefügt`); showWorkout(id); }
     catch (e) { showError(e); }
   };
   $('#delWorkout').onclick = async () => {
@@ -500,11 +548,12 @@ async function showExercises() {
   try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
-    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. Mit den Pfeilen legen Sie die Reihenfolge fest, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“ oder „Zeit“ legt fest, wie die Übung erfasst wird (antippen zum Wechseln). Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
     <div class="card">
       ${active.map((e, i) => `
         <div class="mng" data-id="${e.id}">
           <input class="nm" value="${esc(e.name)}" maxlength="100" aria-label="Name">
+          <button class="mode-btn" aria-label="Erfassung: ${e.mode === 'time' ? 'Zeit' : 'Gewicht'} – antippen zum Wechseln">${e.mode === 'time' ? '⏱ Zeit' : 'Gewicht'}</button>
           <button class="up" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
           <button class="down" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
           <button class="hide-btn" aria-label="Ausblenden" title="Ausblenden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
@@ -513,6 +562,7 @@ async function showExercises() {
     <div class="card pad">
       <label for="newEx">Neue Übung</label>
       <div class="row"><input id="newEx" placeholder="Name der Übung" maxlength="100"><button class="primary" id="addEx">Hinzufügen</button></div>
+      ${modePicker('mngExMode')}
     </div>
     ${hidden.length ? `<h2>Ausgeblendet</h2><div class="card">
       ${hidden.map(e => `
@@ -536,6 +586,10 @@ async function showExercises() {
       try { await store.updateExercise(exId, { name }); active[idx].name = name; toast('Gespeichert'); }
       catch (e) { nm.value = active[idx].name; showError(e); }
     };
+    $('.mode-btn', row).onclick = async () => {
+      const mode = active[idx].mode === 'time' ? 'weight' : 'time';
+      try { await store.updateExercise(exId, { mode }); toast(mode === 'time' ? 'Wird mit Zeit erfasst' : 'Wird mit Gewicht erfasst'); showExercises(); } catch (e) { showError(e); }
+    };
     $('.up', row).onclick = () => move(idx, -1);
     $('.down', row).onclick = () => move(idx, 1);
     $('.hide-btn', row).onclick = async () => {
@@ -548,7 +602,7 @@ async function showExercises() {
   $('#addEx').onclick = async () => {
     const name = $('#newEx').value.trim();
     if (!name) return;
-    try { await store.addExercise(name); toast(`„${name}“ hinzugefügt`); showExercises(); } catch (e) { showError(e); }
+    try { await store.addExercise(name, pickedMode('mngExMode')); toast(`„${name}“ hinzugefügt`); showExercises(); } catch (e) { showError(e); }
   };
 }
 
@@ -560,23 +614,25 @@ async function showHistory(exId) {
   setHeader(ex ? ex.name : 'Verlauf', true);
   if (!hist.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine Sätze erfasst.</div>'; return; }
 
-  // Pro Training: Höchstgewicht; Bestwert = höher als alle früheren Trainings
+  // Pro Training: Höchstgewicht bzw. längste Zeit; Bestwert = besser als alle früheren Trainings
+  const mode = ex?.mode || 'weight';
   let runningBest = -Infinity;
   const points = hist.map(h => {
-    const max = maxWeight(h.sets);
+    const max = bestOf(mode, h.sets);
     const pr = max > runningBest && runningBest !== -Infinity;
     runningBest = Math.max(runningBest, max);
     return { ...h, max, pr };
-  });
+  }).filter(p => p.max !== -Infinity);   // Sätze der anderen Erfassungsart haben keinen Wert
   const best = runningBest;
+  if (!points.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine passenden Sätze erfasst.</div>'; return; }
 
   app.innerHTML = `
     <div class="stats">
-      <div class="card stat"><div class="v">${fmtW(best)} kg</div><div class="l">Bestwert</div></div>
+      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">Bestwert</div></div>
       <div class="card stat"><div class="v">${points.length}</div><div class="l">Trainings</div></div>
     </div>
     <div class="card chart-card">
-      <h3>Höchstgewicht pro Training (kg)</h3>
+      <h3>${mode === 'time' ? 'Längste Zeit pro Training' : 'Höchstgewicht pro Training (kg)'}</h3>
       <div id="chart"></div>
       <div class="tip" id="tip"></div>
     </div>
@@ -592,10 +648,11 @@ async function showHistory(exId) {
         </div>`).join('')}
     </div>`;
   app.querySelectorAll('[data-w]').forEach(el => el.onclick = () => go(`#w${el.dataset.w}`));
-  drawChart($('#chart'), $('#tip'), points);
+  drawChart($('#chart'), $('#tip'), points, mode);
 }
 
-function drawChart(host, tip, points) {
+function drawChart(host, tip, points, mode = 'weight') {
+  const axisFmt = mode === 'time' ? v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}` : fmtW;
   const W = Math.max(host.clientWidth, 280), H = 220;
   const m = { t: 12, r: 16, b: 26, l: 40 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
@@ -603,7 +660,8 @@ function drawChart(host, tip, points) {
   let lo = Math.min(...vals), hi = Math.max(...vals);
   // Saubere Achsenschritte
   const span = hi - lo || Math.max(hi * 0.2, 5);
-  const step = [1, 2, 2.5, 5, 10, 20, 25, 50, 100].find(s => span / s <= 4) || 100;
+  const steps = mode === 'time' ? [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600] : [1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+  const step = steps.find(s => span / s <= 4) || steps[steps.length - 1];
   lo = Math.max(0, Math.floor((lo - span * 0.1) / step) * step);
   hi = Math.ceil((hi + span * 0.1) / step) * step;
   if (hi === lo) hi = lo + step;
@@ -614,14 +672,14 @@ function drawChart(host, tip, points) {
   for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v);
   const grid = ticks.map(v => `
     <line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
-    <text class="axis" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${fmtW(v)}</text>`).join('');
+    <text class="axis" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${axisFmt(v)}</text>`).join('');
   const xLabels = (points.length === 1 ? [0] : [0, points.length - 1]).map(i => `
     <text class="axis" x="${x(i)}" y="${H - 6}" text-anchor="${points.length === 1 ? 'middle' : i === 0 ? 'start' : 'end'}">${fmtShort(points[i].date)}</text>`).join('');
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.max).toFixed(1)}`).join('');
   const dots = points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.max)}" r="${p.pr ? 5 : 4}" fill="${p.pr ? 'var(--pr-text)' : 'var(--accent)'}" stroke="var(--card)" stroke-width="2"/>`).join('');
 
   host.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Höchstgewicht pro Training">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${mode === 'time' ? 'Längste Zeit' : 'Höchstgewicht'} pro Training">
       ${grid}${xLabels}
       <line id="cross" y1="${m.t}" y2="${m.t + ih}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
       <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -635,7 +693,7 @@ function drawChart(host, tip, points) {
     points.forEach((p, i) => { if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i; });
     const p = points[best];
     cross.setAttribute('x1', x(best)); cross.setAttribute('x2', x(best)); cross.setAttribute('visibility', 'visible');
-    tip.innerHTML = `${fmtDate(p.date)}<br><strong>${fmtW(p.max)} kg</strong>${p.pr ? ' ★' : ''} · ${p.sets.length} Sätze`;
+    tip.innerHTML = `${fmtDate(p.date)}<br><strong>${fmtMetric(mode, p.max)}</strong>${p.pr ? ' ★' : ''} · ${p.sets.length} Sätze`;
     const sx = x(best) * (r.width / W) + 4, sy = y(p.max) * (r.height / H) + 14 - 10;
     tip.style.display = 'block';
     tip.style.left = Math.min(Math.max(sx, 70), r.width - 70) + 'px';
