@@ -3,6 +3,10 @@
 // Zeigt keine Passwörter oder Codes an. Nach erfolgreicher Prüfung darf die Datei gelöscht werden.
 // Bewusst in einfacher PHP-Syntax geschrieben, damit sie auch auf alten PHP-Versionen läuft.
 
+// Fehler direkt anzeigen statt einer leeren Seite
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
 if (isset($_GET['header'])) {
     // Test: kommt der Header X-Token beim Server an?
     header('Content-Type: application/json; charset=utf-8');
@@ -25,12 +29,25 @@ $cfg = null;
 if (!is_file($cfgFile)) {
     check('config.php', false, 'nicht gefunden – config.sample.php als config.php speichern');
 } else {
-    $cfg = include $cfgFile;
-    if (!is_array($cfg)) {
+    $cfgError = '';
+    try {
+        $cfg = include $cfgFile;
+    } catch (Exception $e) {
+        $cfgError = 'Zeile ' . $e->getLine() . ': ' . $e->getMessage();
+    } catch (Throwable $e) {   // PHP 7+: Syntaxfehler in config.php
+        $cfgError = 'Zeile ' . $e->getLine() . ': ' . $e->getMessage();
+    }
+    if ($cfgError !== '') {
+        check('config.php', false, 'enthält einen Fehler (' . htmlspecialchars($cfgError) . '). Häufige Ursachen: fehlendes Komma am Zeilenende, typografische Anführungszeichen „ “ ‘ ’ statt gerader \', fehlendes Semikolon nach ];');
+        $cfg = null;
+    } elseif (!is_array($cfg)) {
         check('config.php', false, 'kann nicht gelesen werden – Schreibweise prüfen (gerade Anführungszeichen \' verwenden, keine „typografischen“)');
         $cfg = null;
     } else {
-        check('config.php', true, 'gefunden');
+        $missing = array();
+        foreach (array('db_host', 'db_name', 'db_user', 'db_pass') as $k) if (!isset($cfg[$k])) $missing[] = $k;
+        if ($missing) { check('config.php', false, 'es fehlen Einträge: ' . implode(', ', $missing)); $cfg = null; }
+        else check('config.php', true, 'gefunden und lesbar');
     }
 }
 
@@ -47,7 +64,9 @@ if ($cfg) {
         check('Zugangscode (app_token)', true, $d);
     }
 
-    try {
+    if (!extension_loaded('pdo_mysql')) {
+        check('Datenbankverbindung', false, 'nicht prüfbar, da PDO MySQL fehlt');
+    } else try {
         $db = new PDO('mysql:host=' . $cfg['db_host'] . ';dbname=' . $cfg['db_name'] . ';charset=utf8mb4',
                       $cfg['db_user'], $cfg['db_pass'], array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
         check('Datenbankverbindung', true, 'Verbindung zu „' . htmlspecialchars($cfg['db_name']) . '“ ok');

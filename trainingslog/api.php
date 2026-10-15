@@ -11,9 +11,29 @@ function out($data, int $status = 200): void {
 }
 function fail(string $msg, int $status = 400): void { out(['error' => $msg], $status); }
 
+// Schwere PHP-Fehler trotzdem als JSON melden, damit die App eine Meldung anzeigen kann
+ini_set('display_errors', '0');
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json; charset=utf-8'); }
+        echo json_encode(['error' => 'PHP-Fehler: ' . $e['message'] . ' (' . basename($e['file']) . ', Zeile ' . $e['line'] . ')'], JSON_UNESCAPED_UNICODE);
+    }
+});
+// mbstring ist nicht auf jedem Hosting aktiv
+function textLength(string $s): int { return function_exists('mb_strlen') ? mb_strlen($s) : (int)preg_match_all('/./us', $s); }
+
 $cfgFile = __DIR__ . '/config.php';
 if (!is_file($cfgFile)) fail('config.php fehlt', 500);
-$cfg = require $cfgFile;
+try {
+    $cfg = require $cfgFile;
+} catch (Throwable $e) {
+    fail('config.php enthält einen Fehler in Zeile ' . $e->getLine() . ' – bitte check.php öffnen', 500);
+}
+if (!is_array($cfg)) fail('config.php ist unvollständig – bitte mit config.sample.php vergleichen', 500);
+foreach (['db_host', 'db_name', 'db_user', 'db_pass'] as $k) {
+    if (!isset($cfg[$k])) fail("In config.php fehlt der Eintrag '$k'", 500);
+}
 
 if (trim((string)($cfg['app_token'] ?? '')) !== '') {
     // Code kommt als Header X-Token; manche Hoster filtern eigene Header, daher Ersatz über ?t=
@@ -99,7 +119,7 @@ try {
             $id = intParam($in, 'id');
             if (array_key_exists('name', $in)) {
                 $name = trim((string)$in['name']);
-                if ($name === '' || mb_strlen($name) > 100) fail('Ungültiger Name');
+                if ($name === '' || textLength($name) > 100) fail('Ungültiger Name');
                 $dup = $db->prepare('SELECT id FROM exercises WHERE name = ? AND id <> ?');
                 $dup->execute([$name, $id]);
                 if ($dup->fetch()) fail('Diesen Namen gibt es bereits');
@@ -138,7 +158,7 @@ try {
         case 'exercise_add':
             if (!$isPost) fail('POST erforderlich', 405);
             $name = trim((string)($in['name'] ?? ''));
-            if ($name === '' || mb_strlen($name) > 100) fail('Ungültiger Name');
+            if ($name === '' || textLength($name) > 100) fail('Ungültiger Name');
             $ex = $db->prepare('SELECT id, active FROM exercises WHERE name = ?');
             $ex->execute([$name]);
             if ($row = $ex->fetch()) {
@@ -193,7 +213,7 @@ try {
             $id = intParam($in, 'id');
             if (array_key_exists('note', $in)) {
                 $note = trim((string)$in['note']);
-                if (mb_strlen($note) > 255) fail('Notiz zu lang (max. 255 Zeichen)');
+                if (textLength($note) > 255) fail('Notiz zu lang (max. 255 Zeichen)');
                 $db->prepare('UPDATE workouts SET note = ? WHERE id = ?')->execute([$note === '' ? null : $note, $id]);
             }
             if (array_key_exists('date', $in)) {
@@ -231,8 +251,9 @@ try {
         default:
             fail('Unbekannte Aktion');
     }
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     if ($db->inTransaction()) $db->rollBack();
+    if (!$e instanceof PDOException) fail('Serverfehler: ' . $e->getMessage(), 500);
     $msg = $e->getMessage();
     if (stripos($msg, "doesn't exist") !== false) fail('Datenbanktabellen fehlen – bitte schema.sql importieren', 500);
     fail(!empty($cfg['debug']) ? "Datenbankfehler: $msg" : 'Datenbankfehler', 500);

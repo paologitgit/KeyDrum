@@ -157,7 +157,8 @@ const ApiStore = {
     if (!res.ok || data.error) {
       // Antwortet api.php mit einer JSON-Fehlermeldung, ist der Server da – nur die Datenbank hat ein Problem
       const err = new Error(data.error || `Fehler ${res.status}`);
-      err.server = res.headers.get('content-type')?.includes('application/json') && !!data.error;
+      err.server = res.status >= 500 || (res.headers.get('content-type')?.includes('application/json') && !!data.error);
+      if (res.status >= 500 && data.error === 'Ungültige Antwort') err.message = `Serverfehler ${res.status} – bitte check.php öffnen`;
       throw err;
     }
     return data;
