@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#ebe1cc">
+<script>
+  // Farbschema vor dem ersten Zeichnen setzen (kein Aufblitzen)
+  (function () { var t = 'light'; try { t = localStorage.getItem('tl_theme') || 'light'; } catch (e) {} document.documentElement.dataset.theme = t; })();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Trainingslog</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,14 +25,23 @@
     --body: "Jost", "Futura", "Century Gothic", sans-serif;
     --paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.28 0 0 0 0 0.18 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
+  /* Farbschema: data-theme = light (Standard) | dark | auto (folgt dem Smartphone) */
+  :root { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark;
+      --bg: #12100d; --card: #1b1814; --text: #ebe1cc; --muted: #a89a7e;
+      --line: #ebe1cc; --soft-line: #3a342a; --grid: #2c271f; --accent: #ebe1cc; --accent-text: #12100d;
+      --chip: #29241c; --prev: #221e18; --prev-line: #ebe1cc; --danger: #d0705e;
+      --pr: #b5412e; --pr-text: #d0705e; --pr-chip-text: #f5eedd;
+  }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root[data-theme="auto"] { color-scheme: dark;
       --bg: #12100d; --card: #1b1814; --text: #ebe1cc; --muted: #a89a7e;
       --line: #ebe1cc; --soft-line: #3a342a; --grid: #2c271f; --accent: #ebe1cc; --accent-text: #12100d;
       --chip: #29241c; --prev: #221e18; --prev-line: #ebe1cc; --danger: #d0705e;
       --pr: #b5412e; --pr-text: #d0705e; --pr-chip-text: #f5eedd;
     }
   }
+  #themeBtn { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; padding: 6px 10px; min-height: 36px; flex: none; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: var(--bg) var(--paper); color: var(--text);
     font: 16px/1.45 var(--body); -webkit-font-smoothing: antialiased; }
@@ -124,6 +138,7 @@
 <header>
   <button class="ghost" id="backBtn" hidden aria-label="Zurück">‹ Zurück</button>
   <h1 id="title">Trainingslog</h1>
+  <button id="themeBtn" aria-label="Farbschema wechseln"></button>
 </header>
 <main id="app"></main>
 <div class="toast" id="toast"></div>
@@ -334,6 +349,24 @@ function route() {
 }
 window.onpopstate = () => { navDepth = Math.max(0, navDepth - 1); route(); };
 $('#backBtn').onclick = () => { navDepth > 0 ? history.back() : (history.replaceState(null, '', location.pathname), route()); };
+
+// ---------- Farbschema: Hell → Dunkel → Auto ----------
+const THEMES = { light: 'Hell', dark: 'Dunkel', auto: 'Auto' };
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('tl_theme', t); } catch {}
+  $('#themeBtn').textContent = THEMES[t];
+  $('#themeBtn').setAttribute('aria-label', `Farbschema: ${THEMES[t]} – antippen zum Wechseln`);
+  const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#12100d' : '#ebe1cc';
+}
+$('#themeBtn').onclick = () => {
+  const order = Object.keys(THEMES), cur = document.documentElement.dataset.theme;
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+  applyTheme(next); toast(`Farbschema: ${THEMES[next]}`);
+};
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme(document.documentElement.dataset.theme));
+applyTheme(THEMES[document.documentElement.dataset.theme] ? document.documentElement.dataset.theme : 'light');
 
 function setHeader(title, back) {
   $('#title').textContent = title;
