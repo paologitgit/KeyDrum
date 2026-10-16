@@ -62,18 +62,68 @@ $isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
  * Läuft nur, solange die Spalte noch fehlt.
  */
 function ensureSchema(PDO $db): void {
+    $hasColumn = function (string $table, string $col) use ($db): bool {
+        return (bool)$db->query("SHOW COLUMNS FROM `$table` LIKE " . $db->quote($col))->fetch();
+    };
     try {
-        $has = $db->query("SHOW COLUMNS FROM exercises LIKE 'mode'")->fetch();
+        $hasMode = $hasColumn('exercises', 'mode');
+        $hasTimes = $hasColumn('workouts', 'start_time');
     } catch (PDOException $e) {
         return; // Tabellen fehlen – wird später mit klarer Meldung gemeldet
     }
-    if ($has) return;
     try {
-        $db->exec("ALTER TABLE exercises ADD COLUMN mode VARCHAR(10) NOT NULL DEFAULT 'weight' AFTER name");
-        $db->exec('ALTER TABLE sets MODIFY weight_kg DECIMAL(6,2) NULL, ADD COLUMN duration_s INT UNSIGNED NULL AFTER reps');
+        if (!$hasMode) {
+            $db->exec("ALTER TABLE exercises ADD COLUMN mode VARCHAR(10) NOT NULL DEFAULT 'weight' AFTER name");
+            $db->exec('ALTER TABLE sets MODIFY weight_kg DECIMAL(6,2) NULL, ADD COLUMN duration_s INT UNSIGNED NULL AFTER reps');
+        }
+        if (!$hasTimes) {
+            $db->exec('ALTER TABLE workouts ADD COLUMN start_time TIME NULL AFTER workout_date, ADD COLUMN end_time TIME NULL AFTER start_time');
+        }
     } catch (PDOException $e) {
-        fail('Die Datenbank konnte nicht automatisch erweitert werden. Bitte migrate_zeit.sql importieren.', 500);
+        fail('Die Datenbank konnte nicht automatisch erweitert werden. Bitte migrate.sql importieren.', 500);
     }
+}
+
+/** Uhrzeit "HH:MM" prüfen; leer = null. */
+function timeParam($v): ?string {
+    if ($v === null || $v === '') return null;
+    if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string)$v)) fail('Ungültige Uhrzeit');
+    return (string)$v;
+}
+function hm($t): ?string { return $t === null ? null : substr((string)$t, 0, 5); }
+
+/**
+ * Überblick über die letzten Trainings vor einem Training (oder die letzten überhaupt):
+ * welche Übungen darin vorkamen und wann jede Übung zuletzt gemacht wurde.
+ */
+function recentInfo(PDO $db, ?int $beforeWorkoutId, int $n = 5): array {
+    if ($beforeWorkoutId) {
+        $st = $db->prepare('SELECT w.id, w.workout_date FROM workouts w JOIN workouts cur ON cur.id = :id
+                            WHERE w.workout_date < cur.workout_date OR (w.workout_date = cur.workout_date AND w.id < cur.id)
+                            ORDER BY w.workout_date DESC, w.id DESC LIMIT ' . $n);
+        $st->execute([':id' => $beforeWorkoutId]);
+    } else {
+        $st = $db->query('SELECT id, workout_date FROM workouts ORDER BY workout_date DESC, id DESC LIMIT ' . $n);
+    }
+    $workouts = array_map(fn($r) => ['id' => (int)$r['id'], 'date' => $r['workout_date']], $st->fetchAll());
+    $done = [];
+    if ($workouts) {
+        $ids = implode(',', array_map(fn($w) => $w['id'], $workouts));
+        foreach ($db->query("SELECT DISTINCT workout_id, exercise_id FROM sets WHERE workout_id IN ($ids)") as $r) {
+            $done[(int)$r['workout_id']][] = (int)$r['exercise_id'];
+        }
+    }
+    // Letztes Datum je Übung (vor dem Training bzw. insgesamt)
+    $sql = 'SELECT s.exercise_id, MAX(w.workout_date) AS last_date FROM sets s JOIN workouts w ON w.id = s.workout_id';
+    if ($beforeWorkoutId) {
+        $sql .= ' JOIN workouts cur ON cur.id = :id WHERE w.workout_date < cur.workout_date OR (w.workout_date = cur.workout_date AND w.id < cur.id)';
+    }
+    $st = $db->prepare($sql . ' GROUP BY s.exercise_id');
+    $st->execute($beforeWorkoutId ? [':id' => $beforeWorkoutId] : []);
+    $last = [];
+    foreach ($st as $r) $last[(int)$r['exercise_id']] = $r['last_date'];
+    foreach ($workouts as &$w) $w['exercises'] = $done[$w['id']] ?? [];
+    return ['workouts' => $workouts, 'last' => (object)$last];
 }
 ensureSchema($db);
 
@@ -212,13 +262,14 @@ try {
         case 'workouts':
             // Unterabfragen statt GROUP BY: funktioniert auch mit sql_mode ONLY_FULL_GROUP_BY (z. B. MariaDB)
             $rows = $db->query(
-                'SELECT w.id, w.workout_date, w.note,
+                'SELECT w.id, w.workout_date, w.note, w.start_time, w.end_time,
                         (SELECT COUNT(*) FROM sets s WHERE s.workout_id = w.id) AS set_count,
                         (SELECT COUNT(DISTINCT s.exercise_id) FROM sets s WHERE s.workout_id = w.id) AS exercise_count
                  FROM workouts w ORDER BY w.workout_date DESC, w.id DESC LIMIT 200'
             )->fetchAll();
             out(array_map(fn($r) => [
                 'id' => (int)$r['id'], 'date' => $r['workout_date'], 'note' => $r['note'],
+                'start_time' => hm($r['start_time']), 'end_time' => hm($r['end_time']),
                 'set_count' => (int)$r['set_count'], 'exercise_count' => (int)$r['exercise_count'],
             ], $rows));
 
@@ -227,12 +278,13 @@ try {
             $date = (string)($in['date'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) fail('Ungültiges Datum');
             $note = trim((string)($in['note'] ?? '')) ?: null;
-            $db->prepare('INSERT INTO workouts (workout_date, note) VALUES (?, ?)')->execute([$date, $note]);
+            $db->prepare('INSERT INTO workouts (workout_date, start_time, note) VALUES (?, ?, ?)')
+               ->execute([$date, timeParam($in['start_time'] ?? null), $note]);
             out(['id' => (int)$db->lastInsertId()]);
 
         case 'workout':
             $id = intParam($_GET, 'id');
-            $w = $db->prepare('SELECT id, workout_date, note FROM workouts WHERE id = ?');
+            $w = $db->prepare('SELECT id, workout_date, start_time, end_time, note FROM workouts WHERE id = ?');
             $w->execute([$id]);
             $wk = $w->fetch();
             if (!$wk) fail('Training nicht gefunden', 404);
@@ -243,6 +295,8 @@ try {
             ] + setRow($r), $st->fetchAll());
             out([
                 'id' => (int)$wk['id'], 'date' => $wk['workout_date'], 'note' => $wk['note'],
+                'start_time' => hm($wk['start_time']), 'end_time' => hm($wk['end_time']),
+                'recent' => recentInfo($db, $id),
                 'sets' => $sets, 'previous' => (object)previousSets($db, $id),
                 'best' => (object)previousBest($db, $id),
             ]);
@@ -255,11 +309,19 @@ try {
                 if (textLength($note) > 255) fail('Notiz zu lang (max. 255 Zeichen)');
                 $db->prepare('UPDATE workouts SET note = ? WHERE id = ?')->execute([$note === '' ? null : $note, $id]);
             }
+            foreach (['start_time', 'end_time'] as $k) {
+                if (array_key_exists($k, $in)) {
+                    $db->prepare("UPDATE workouts SET $k = ? WHERE id = ?")->execute([timeParam($in[$k]), $id]);
+                }
+            }
             if (array_key_exists('date', $in)) {
                 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$in['date'])) fail('Ungültiges Datum');
                 $db->prepare('UPDATE workouts SET workout_date = ? WHERE id = ?')->execute([$in['date'], $id]);
             }
             out(['ok' => true]);
+
+        case 'overview':
+            out(recentInfo($db, null));
 
         case 'workout_delete':
             if (!$isPost) fail('POST erforderlich', 405);

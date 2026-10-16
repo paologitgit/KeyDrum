@@ -4,7 +4,9 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 
 ## Funktionen
 
-- **Neues Training:** Datum wählen (vorausgefüllt mit heute) und „Starten“ tippen.
+- **Neues Training:** Datum wählen (vorausgefüllt mit heute) und „Starten“ tippen. Bei heutigen Trainings wird die Startzeit automatisch gesetzt.
+- **Trainingsdauer:** Unten im Training „Training beendet“ tippen. Start und Ende lassen sich oben im Training korrigieren; die Dauer erscheint auch in der Trainingsliste.
+- **Länger nicht gemacht:** Übungen, die in keinem der letzten 5 Trainings vorkamen, erhalten einen roten Balken mit dem Datum der letzten Ausführung. Oben im Training stehen sie zusätzlich als Liste (antippen springt zur Übung). Die Startseite zeigt die letzten 5 Trainings als Raster.
 - **Übungen:** Die Liste ist zu Beginn mit diesen Übungen gefüllt: Deadlift, Latzug, Sitting Row, Pull-up, Bankdrücken, Bizeps, Schulter seitlich, Rücken, Butterfly reverse.
 - **Sätze erfassen:** Gewicht (Komma oder Punkt), Wiederholungen optional, dann „+ Satz“. Das Gewicht vom letzten Satz ist bereits eingetragen.
 - **Letztes Training:** Jede Übung zeigt die Sätze aus dem letzten Training, in dem sie vorkam. Mit „Sätze übernehmen“ wird alles auf einmal kopiert.
@@ -23,20 +25,20 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 | `api.php` | JSON-Schnittstelle zu MySQL (PDO mit vorbereiteten Abfragen) |
 | `schema.sql` | Tabellen und Grundübungen |
 | `config.sample.php` | Vorlage für die Zugangsdaten → als `config.php` kopieren |
-| `migrate_zeit.sql` | Nur nötig, falls `api.php` eine bestehende Datenbank nicht selbst um die Zeit-Erfassung erweitern darf |
+| `migrate.sql` | Nur nötig, falls `api.php` eine bestehende Datenbank nicht selbst erweitern darf |
 | `check.php` | Prüfseite für die Einrichtung (zeigt keine Passwörter); kann danach gelöscht werden |
 
 ## Datenmodell
 
 ```
 exercises (id, name UNIQUE, mode 'weight'|'time', sort_order, active)
-workouts  (id, workout_date, note)
+workouts  (id, workout_date, start_time NULL, end_time NULL, note)
 sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg NULL, reps NULL, duration_s NULL)
 ```
 
 - Ein Training (`workouts`) hat beliebig viele Sätze (`sets`).
 - Jeder Satz gehört zu einer Übung und hat eine Nummer und – je nach Übung – ein Gewicht mit optionalen Wiederholungen oder eine Dauer in Sekunden.
-- Bestehende Datenbanken erweitert `api.php` beim ersten Aufruf automatisch um die Zeit-Erfassung.
+- Bestehende Datenbanken erweitert `api.php` beim ersten Aufruf automatisch (Zeit-Übungen, Start-/Endzeit).
 - „Letztes Mal“ = das jüngste frühere Training, das diese Übung enthält. Lässt man eine Übung einmal aus, erscheint trotzdem der letzte tatsächliche Wert.
 - Wenn ein Training gelöscht wird, werden seine Sätze mitgelöscht. Übungen werden nie gelöscht, sondern nur deaktiviert (`active = 0`); so bleibt der Verlauf erhalten.
 
@@ -73,9 +75,10 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `exercise_reorder` | POST | `{ids: [..]}` in gewünschter Reihenfolge |
 | `history&exercise_id=` | GET | alle Trainings mit Sätzen dieser Übung |
 | `workouts` | GET | – |
-| `workout_create` | POST | `{date: "YYYY-MM-DD"}` |
+| `workout_create` | POST | `{date: "YYYY-MM-DD", start_time?: "HH:MM"}` |
 | `workout&id=` | GET | Training mit Sätzen, `previous` (letzte Werte je Übung) und `best` (bisheriger Bestwert je Übung) |
-| `workout_update` | POST | `{id, note?, date?}` |
+| `workout_update` | POST | `{id, note?, date?, start_time?, end_time?}` (Uhrzeit „HH:MM“) |
+| `overview` | GET | letzte 5 Trainings mit ihren Übungen und letztes Datum je Übung |
 | `workout_delete` | POST | `{id}` |
 | `set_add` | POST | `{workout_id, exercise_id, weight?, reps?, duration?}` (Gewicht oder Dauer in Sekunden) |
 | `set_delete` | POST | `{id}` |

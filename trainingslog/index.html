@@ -108,6 +108,31 @@
   .seg label + label span { border-left: 1.5px solid var(--line); }
   .seg input:checked + span { background: var(--accent); color: var(--accent-text); }
   .seg input:focus-visible + span { outline: 2px solid var(--pr); outline-offset: -3px; }
+  /* Länger nicht gemacht */
+  .ex { scroll-margin-top: 96px; }
+  .ex.overdue { border-left: 8px solid var(--pr); }
+  .overdue-tag { color: var(--pr-text); font-weight: 600; font-style: normal; }
+  .overdue-card { border-color: var(--pr); box-shadow: 4px 4px 0 var(--pr); }
+  .overdue-card .chip { border-color: var(--pr); color: var(--pr-text); cursor: pointer; background: transparent; }
+  /* Übersicht letzte 5 Trainings */
+  .ov { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .ov th, .ov td { padding: 8px 4px; text-align: center; border-top: 1px solid var(--soft-line); }
+  .ov thead th { border-top: 0; font: 12px/1 var(--body); font-weight: 600; letter-spacing: .04em; color: var(--muted); padding-top: 12px; }
+  .ov tbody th { text-align: left; font-weight: 500; padding-left: 12px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov .dot { display: inline-block; width: 14px; height: 14px; background: var(--accent); }
+  .ov .no { display: inline-block; width: 14px; height: 14px; border: 1px dashed var(--soft-line); }
+  .ov tr.overdue th { color: var(--pr-text); box-shadow: inset 6px 0 0 var(--pr); padding-left: 14px; }
+  .ov-legend { margin: 0; padding: 8px 12px 12px; font-size: 13px; }
+  /* Trainingsdauer */
+  .times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .times label { font-size: 11px; }
+  .status { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .status:empty { display: none; }
+  .status + .field { margin-top: 14px; }
+  .status strong { font: 18px/1 var(--display); letter-spacing: .03em; color: var(--text); }
+  .finish { width: 100%; margin-top: 18px; padding: 16px; font-size: 20px; }
+  .finished { margin-top: 18px; text-align: center; padding: 14px; border: 1.5px dashed var(--line); }
+  .finished strong { font: 22px/1.2 var(--display); text-transform: uppercase; letter-spacing: .04em; display: block; }
   .empty { padding: 18px 16px; color: var(--muted); font-style: italic; }
   /* Übungsverwaltung */
   .mng { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 6px; align-items: center; padding: 12px; border-top: 1px solid var(--soft-line); }
@@ -165,6 +190,11 @@ const fmtSet = s => {
 // Übungsart: 'weight' (kg × Wdh.) oder 'time' (Dauer). Kennzahl für Bestwert und Diagramm.
 const metricKey = mode => mode === 'time' ? 'duration' : 'weight';
 const fmtMetric = (mode, v) => mode === 'time' ? fmtDur(v) : `${fmtW(v)} kg`;
+const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// Minuten zwischen zwei Uhrzeiten "HH:MM" (über Mitternacht hinweg)
+const minutesBetween = (a, b) => { const [ah, am] = a.split(':').map(Number), [bh, bm] = b.split(':').map(Number); let m = bh * 60 + bm - (ah * 60 + am); return m < 0 ? m + 1440 : m; };
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h` : `${m} min`;
+const OVERDUE_AFTER = 5;   // Übung gilt als „länger nicht gemacht“, wenn sie in den letzten 5 Trainings fehlt
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
 const bestOf = (mode, sets) => Math.max(...sets.map(s => s[metricKey(mode)] ?? -Infinity));
 // Auswahl beim Anlegen einer Übung: Gewicht oder Zeit
@@ -230,7 +260,8 @@ const ApiStore = {
   reorderExercises(ids) { return this.call('exercise_reorder', {}, { ids }); },
   history(exercise_id) { return this.call('history', { exercise_id }); },
   workouts() { return this.call('workouts'); },
-  createWorkout(date) { return this.call('workout_create', {}, { date }); },
+  createWorkout(date, start_time = null) { return this.call('workout_create', {}, { date, start_time }); },
+  overview() { return this.call('overview'); },
   workout(id) { return this.call('workout', { id }); },
   updateWorkout(id, fields) { return this.call('workout_update', {}, { id, ...fields }); },
   deleteWorkout(id) { return this.call('workout_delete', {}, { id }); },
@@ -286,7 +317,16 @@ const LocalStore = {
       return { ...w, set_count: s.length, exercise_count: new Set(s.map(x => x.exercise_id)).size };
     }).sort((a, b) => this.byDate(b, a));
   },
-  async createWorkout(date) { const db = this.load(); const w = { id: ++db.seq, date, note: null }; db.workouts.push(w); this.save(db); return { id: w.id }; },
+  // Überblick: letzte Trainings (neueste zuerst) mit ihren Übungen + letztes Datum je Übung
+  recent(db, list) {
+    const top = list.slice(0, OVERDUE_AFTER).map(w => ({ id: w.id, date: w.date,
+      exercises: [...new Set(db.sets.filter(s => s.workout_id === w.id).map(s => s.exercise_id))] }));
+    const dateOf = Object.fromEntries(list.map(w => [w.id, w.date])), last = {};
+    for (const s of db.sets) { const d = dateOf[s.workout_id]; if (d && (!last[s.exercise_id] || d > last[s.exercise_id])) last[s.exercise_id] = d; }
+    return { workouts: top, last };
+  },
+  async overview() { const db = this.load(); return this.recent(db, db.workouts.slice().sort((a, b) => this.byDate(b, a))); },
+  async createWorkout(date, start_time = null) { const db = this.load(); const w = { id: ++db.seq, date, start_time, end_time: null, note: null }; db.workouts.push(w); this.save(db); return { id: w.id }; },
   async workout(id) {
     const db = this.load();
     const w = db.workouts.find(x => x.id === id);
@@ -303,12 +343,14 @@ const LocalStore = {
       const maxOf = k => { const v = es.map(x => x[k]).filter(v => v != null); return v.length ? Math.max(...v) : null; };
       if (es.length) best[ex.id] = { weight: maxOf('weight'), duration: maxOf('duration') };
     }
-    return { ...w, sets: db.sets.filter(x => x.workout_id === id).sort((a, b) => a.set_no - b.set_no), previous, best };
+    return { ...w, sets: db.sets.filter(x => x.workout_id === id).sort((a, b) => a.set_no - b.set_no), previous, best, recent: this.recent(db, earlier) };
   },
   async updateWorkout(id, fields) {
     const db = this.load(), w = db.workouts.find(x => x.id === id);
     if ('note' in fields) w.note = fields.note.trim() || null;
     if ('date' in fields) w.date = fields.date;
+    if ('start_time' in fields) w.start_time = fields.start_time || null;
+    if ('end_time' in fields) w.end_time = fields.end_time || null;
     this.save(db);
   },
   async deleteWorkout(id) { const db = this.load(); db.workouts = db.workouts.filter(w => w.id !== id); db.sets = db.sets.filter(s => s.workout_id !== id); this.save(db); },
@@ -339,7 +381,9 @@ let state = { workoutId: null, open: new Set() };
 
 let navDepth = 0;   // Anzahl eigener Navigationsschritte – „Zurück“ verlässt die App nie
 function go(hash) { if (location.hash !== hash) { history.pushState(null, '', hash || location.pathname); navDepth++; } route(); }
+let liveTimer = null;
 function route() {
+  clearInterval(liveTimer);
   const h = location.hash;
   let m;
   if ((m = h.match(/^#w(\d+)$/))) return showWorkout(Number(m[1]));
@@ -431,8 +475,24 @@ function showLogin(err) {
 // ---------- Ansicht: Start ----------
 async function showHome() {
   setHeader('Trainingslog', false);
-  let workouts = [];
-  try { workouts = await store.workouts(); } catch (e) { return showPageError(e); }
+  let workouts = [], ov, allEx;
+  try { [workouts, ov, allEx] = await Promise.all([store.workouts(), store.overview(), store.exercises()]); } catch (e) { return showPageError(e); }
+  // Raster: Spalten = letzte Trainings (älteste links), Zeilen = aktive Übungen
+  const cols = ov.workouts.slice().reverse();
+  const enough = ov.workouts.length >= OVERDUE_AFTER;
+  const overviewHtml = cols.length ? `
+    <h2>Letzte ${cols.length} Trainings</h2>
+    <div class="card">
+      <table class="ov">
+        <thead><tr><th></th>${cols.map(c => `<th>${fmtShort(c.date)}</th>`).join('')}</tr></thead>
+        <tbody>${allEx.map(ex => {
+          const doneAny = cols.some(c => c.exercises.includes(ex.id));
+          return `<tr class="${enough && !doneAny ? 'overdue' : ''}"><th>${esc(ex.name)}</th>${cols.map(c =>
+            `<td>${c.exercises.includes(ex.id) ? '<span class="dot" aria-label="gemacht"></span>' : '<span class="no" aria-label="nicht gemacht"></span>'}</td>`).join('')}</tr>`;
+        }).join('')}</tbody>
+      </table>
+      <p class="muted ov-legend">■ gemacht${enough ? ' · <span class="overdue-tag">Rot</span>: in keinem der letzten 5 Trainings' : ''}</p>
+    </div>` : '';
   app.innerHTML = `
     ${store.mode === 'local' ? '<div class="banner">Lokaler Modus: Daten werden nur in diesem Browser gespeichert. Mit api.php und MySQL werden sie zentral abgelegt.</div>' : ''}
     <div class="card pad">
@@ -443,13 +503,14 @@ async function showHome() {
       </div>
     </div>
     <button class="link-btn" id="manageBtn"><span>Übungen verwalten</span><span class="muted">›</span></button>
+    ${overviewHtml}
     <h2>Bisherige Trainings</h2>
     <div class="card">
       ${workouts.length ? workouts.map(w => `
         <div class="list-item" data-id="${w.id}">
           <div class="grow">
             <div class="date">${fmtDate(w.date)}</div>
-            <div class="muted">${w.exercise_count} Übungen · ${w.set_count} Sätze</div>
+            <div class="muted">${w.exercise_count} Übungen · ${w.set_count} Sätze${w.start_time && w.end_time ? ` · ${fmtMin(minutesBetween(w.start_time, w.end_time))}` : ''}</div>
             ${w.note ? `<div class="note">${esc(w.note)}</div>` : ''}
           </div>
           <span class="muted">›</span>
@@ -458,7 +519,8 @@ async function showHome() {
   $('#createBtn').onclick = async () => {
     const date = $('#date').value;
     if (!date) return toast('Bitte Datum wählen');
-    try { const r = await store.createWorkout(date); go(`#w${r.id}`); } catch (e) { showError(e); }
+    // Startzeit nur automatisch setzen, wenn das Training heute stattfindet
+    try { const r = await store.createWorkout(date, date === today() ? nowHM() : null); go(`#w${r.id}`); } catch (e) { showError(e); }
   };
   $('#manageBtn').onclick = () => go('#ex');
   app.querySelectorAll('.list-item').forEach(el => el.onclick = () => go(`#w${el.dataset.id}`));
@@ -481,11 +543,34 @@ async function showWorkout(id) {
   const bestVal = exId => w.best[exId]?.[metricKey(modeOf[exId])] ?? null;
   const isPr = (exId, set) => { const b = bestVal(exId), v = set[metricKey(modeOf[exId])]; return b !== null && v != null && v > b; };
 
+  // Länger nicht gemacht: in keinem der letzten 5 Trainings davor und heute noch nicht erfasst
+  const recentDone = new Set(w.recent.workouts.flatMap(r => r.exercises));
+  const isOverdue = ex => ex.active && w.recent.workouts.length >= OVERDUE_AFTER && !recentDone.has(ex.id) && !setsBy[ex.id];
+  const lastTxt = ex => w.recent.last[ex.id] ? `zuletzt ${fmtDate(w.recent.last[ex.id])}` : 'noch nie gemacht';
+  const overdue = exercises.filter(isOverdue);
+
+  // Dauer: läuft (Start ohne Ende) oder beendet
+  const statusHtml = () => {
+    if (w.start_time && w.end_time) return `Dauer <strong>${fmtMin(minutesBetween(w.start_time, w.end_time))}</strong>`;
+    if (w.start_time && w.date === today()) return `Läuft seit <strong>${fmtMin(minutesBetween(w.start_time, nowHM()))}</strong>`;
+    return '';
+  };
+
   app.innerHTML = `
     <div class="card pad">
       <div class="field"><label for="wDate">Datum</label><input id="wDate" type="date" value="${w.date}"></div>
+      <div class="field times">
+        <div><label for="wStart">Start</label><input id="wStart" type="time" value="${w.start_time || ''}"></div>
+        <div><label for="wEnd">Ende</label><input id="wEnd" type="time" value="${w.end_time || ''}"></div>
+      </div>
+      <div class="status" id="wStatus">${statusHtml()}</div>
       <div class="field"><label for="wNote">Notiz</label><textarea id="wNote" maxlength="255" placeholder="z. B. Schulter etwas müde">${esc(w.note)}</textarea></div>
-    </div>` + exercises.map(ex => {
+    </div>
+    ${overdue.length ? `
+    <div class="card pad overdue-card">
+      <label>Länger nicht gemacht</label>
+      <div class="chips">${overdue.map(ex => `<button class="chip" data-jump="${ex.id}">${esc(ex.name)}</button>`).join('')}</div>
+    </div>` : ''}` + exercises.map(ex => {
     const cur = setsBy[ex.id] || [], prev = w.previous[ex.id];
     const lastW = cur.length ? cur[cur.length - 1] : prev?.sets[prev.sets.length - 1];
     const open = state.open.has(ex.id);
@@ -493,14 +578,16 @@ async function showWorkout(id) {
     const timeMode = modeOf[ex.id] === 'time';
     const lastDur = lastW?.duration ?? null;
     return `
-    <div class="card ex ${open ? 'open' : ''}" data-ex="${ex.id}">
+    <div class="card ex ${open ? 'open' : ''} ${isOverdue(ex) ? 'overdue' : ''}" data-ex="${ex.id}">
       <div class="ex-head">
         <span class="name">${esc(ex.name)}</span>
         ${hasPr ? '<span class="badge pr">★ Bestwert</span>' : ''}
         ${cur.length ? `<span class="badge">${cur.length}</span>` : ''}
         <span class="muted arrow">${open ? '▾' : '▸'}</span>
       </div>
-      <div class="ex-sum">${prev ? `Letztes Mal: ${esc(summarize(prev.sets))}` : 'Noch nie gemacht'}</div>
+      <div class="ex-sum">${isOverdue(ex)
+        ? (w.recent.last[ex.id] ? `<span class="overdue-tag">Länger nicht gemacht · ${lastTxt(ex)}</span><br>` : '<span class="overdue-tag">Noch nie gemacht</span>')
+        : ''}${prev ? `Letztes Mal: ${esc(summarize(prev.sets))}` : (isOverdue(ex) ? '' : 'Noch nie gemacht')}</div>
       <div class="ex-body">
         <div class="prev">
           ${prev ? `<strong>Letztes Training (${fmtDate(prev.date)})</strong>
@@ -534,7 +621,34 @@ async function showWorkout(id) {
       <div class="row"><input id="newEx" placeholder="Name der Übung" maxlength="100"><button class="primary" id="addEx">Hinzufügen</button></div>
       ${modePicker('newExMode')}
     </div>
+    ${w.end_time
+      ? `<div class="finished">Training beendet um ${w.end_time}${w.start_time ? `<strong>Dauer ${fmtMin(minutesBetween(w.start_time, w.end_time))}</strong>` : ''}</div>`
+      : `<button class="primary finish" id="finishBtn">Training beendet</button>`}
     <button class="danger" id="delWorkout" style="width:100%;margin-top:16px">Training löschen</button>`;
+
+  // Laufende Dauer jede halbe Minute aktualisieren
+  clearInterval(liveTimer);
+  if (w.start_time && !w.end_time && w.date === today()) liveTimer = setInterval(() => { const el = $('#wStatus'); if (el) el.innerHTML = statusHtml(); }, 30000);
+
+  const saveTime = key => async e => {
+    try { await store.updateWorkout(id, { [key]: e.target.value || null }); showWorkout(id); } catch (err) { showError(err); }
+  };
+  $('#wStart').onchange = saveTime('start_time');
+  $('#wEnd').onchange = saveTime('end_time');
+  const finishBtn = $('#finishBtn');
+  if (finishBtn) finishBtn.onclick = async () => {
+    const end = nowHM();
+    try {
+      await store.updateWorkout(id, { end_time: end });
+      toast(w.start_time ? `Training beendet · Dauer ${fmtMin(minutesBetween(w.start_time, end))}` : 'Training beendet');
+      history.replaceState(null, '', location.pathname); route();
+    } catch (e) { showError(e); }
+  };
+  app.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
+    const exId = Number(b.dataset.jump), card = app.querySelector(`.ex[data-ex="${exId}"]`);
+    if (!card.classList.contains('open')) $('.ex-head', card).click();
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   $('#wDate').onchange = async e => {
     if (!e.target.value) return;

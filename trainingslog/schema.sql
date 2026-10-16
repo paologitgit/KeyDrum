@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS exercises (
 CREATE TABLE IF NOT EXISTS workouts (
   id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   workout_date  DATE NOT NULL,
+  start_time    TIME NULL,
+  end_time      TIME NULL,
   note          VARCHAR(255) NULL,
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_workout_date (workout_date)
