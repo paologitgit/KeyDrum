@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS workouts (
   start_time    TIME NULL,
   end_time      TIME NULL,
   note          VARCHAR(255) NULL,
+  rpe           TINYINT UNSIGNED NULL,          -- Tagesform 1–10
+  body_weight   DECIMAL(5,2) NULL,              -- Körpergewicht in kg
+  plan_id       INT UNSIGNED NULL,
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_workout_date (workout_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -35,6 +38,20 @@ CREATE TABLE IF NOT EXISTS sets (
   KEY idx_sets_exercise (exercise_id, workout_id),
   CONSTRAINT fk_sets_workout  FOREIGN KEY (workout_id)  REFERENCES workouts(id)  ON DELETE CASCADE,
   CONSTRAINT fk_sets_exercise FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS plans (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(100) NOT NULL,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS plan_exercises (
+  plan_id      INT UNSIGNED NOT NULL,
+  exercise_id  INT UNSIGNED NOT NULL,
+  PRIMARY KEY (plan_id, exercise_id),
+  CONSTRAINT fk_pe_plan     FOREIGN KEY (plan_id)     REFERENCES plans(id)     ON DELETE CASCADE,
+  CONSTRAINT fk_pe_exercise FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO exercises (name, sort_order) VALUES

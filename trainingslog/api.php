@@ -68,6 +68,8 @@ function ensureSchema(PDO $db): void {
     try {
         $hasMode = $hasColumn('exercises', 'mode');
         $hasTimes = $hasColumn('workouts', 'start_time');
+        $hasRpe = $hasColumn('workouts', 'rpe');
+        $hasPlans = (bool)$db->query("SHOW TABLES LIKE 'plans'")->fetch();
     } catch (PDOException $e) {
         return; // Tabellen fehlen – wird später mit klarer Meldung gemeldet
     }
@@ -78,6 +80,23 @@ function ensureSchema(PDO $db): void {
         }
         if (!$hasTimes) {
             $db->exec('ALTER TABLE workouts ADD COLUMN start_time TIME NULL AFTER workout_date, ADD COLUMN end_time TIME NULL AFTER start_time');
+        }
+        if (!$hasRpe) {
+            $db->exec('ALTER TABLE workouts ADD COLUMN rpe TINYINT UNSIGNED NULL, ADD COLUMN body_weight DECIMAL(5,2) NULL, ADD COLUMN plan_id INT UNSIGNED NULL');
+        }
+        if (!$hasPlans) {
+            $db->exec("CREATE TABLE IF NOT EXISTS plans (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            $db->exec("CREATE TABLE IF NOT EXISTS plan_exercises (
+                plan_id INT UNSIGNED NOT NULL,
+                exercise_id INT UNSIGNED NOT NULL,
+                PRIMARY KEY (plan_id, exercise_id),
+                CONSTRAINT fk_pe_plan FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+                CONSTRAINT fk_pe_exercise FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         }
     } catch (PDOException $e) {
         fail('Die Datenbank konnte nicht automatisch erweitert werden. Bitte migrate.sql importieren.', 500);
@@ -91,6 +110,27 @@ function timeParam($v): ?string {
     return (string)$v;
 }
 function hm($t): ?string { return $t === null ? null : substr((string)$t, 0, 5); }
+
+/** Tagesform 1–10 oder null. */
+function rpeParam($v): ?int {
+    if ($v === null || $v === '') return null;
+    if (!is_numeric($v) || $v < 1 || $v > 10) fail('Tagesform muss zwischen 1 und 10 liegen');
+    return (int)$v;
+}
+/** Körpergewicht in kg oder null. */
+function bodyWeightParam($v): ?float {
+    if ($v === null || $v === '') return null;
+    if (!is_numeric($v) || $v <= 0 || $v >= 500) fail('Ungültiges Körpergewicht');
+    return (float)$v;
+}
+function planIdParam($v): ?int { return ($v === null || $v === '' || (int)$v <= 0) ? null : (int)$v; }
+
+/** Übungen eines Plans setzen (ersetzt die bisherige Auswahl). */
+function setPlanExercises(PDO $db, int $planId, array $exerciseIds): void {
+    $db->prepare('DELETE FROM plan_exercises WHERE plan_id = ?')->execute([$planId]);
+    $ins = $db->prepare('INSERT IGNORE INTO plan_exercises (plan_id, exercise_id) VALUES (?, ?)');
+    foreach (array_unique(array_map('intval', $exerciseIds)) as $eid) if ($eid > 0) $ins->execute([$planId, $eid]);
+}
 
 /**
  * Überblick über die letzten Trainings vor einem Training (oder die letzten überhaupt):
@@ -278,8 +318,8 @@ try {
             $date = (string)($in['date'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) fail('Ungültiges Datum');
             $note = trim((string)($in['note'] ?? '')) ?: null;
-            $db->prepare('INSERT INTO workouts (workout_date, start_time, note) VALUES (?, ?, ?)')
-               ->execute([$date, timeParam($in['start_time'] ?? null), $note]);
+            $db->prepare('INSERT INTO workouts (workout_date, start_time, note, plan_id) VALUES (?, ?, ?, ?)')
+               ->execute([$date, timeParam($in['start_time'] ?? null), $note, planIdParam($in['plan_id'] ?? null)]);
             out(['id' => (int)$db->lastInsertId()]);
 
         case 'workout':
@@ -314,10 +354,66 @@ try {
                     $db->prepare("UPDATE workouts SET $k = ? WHERE id = ?")->execute([timeParam($in[$k]), $id]);
                 }
             }
+            if (array_key_exists('rpe', $in)) $db->prepare('UPDATE workouts SET rpe = ? WHERE id = ?')->execute([rpeParam($in['rpe']), $id]);
+            if (array_key_exists('body_weight', $in)) $db->prepare('UPDATE workouts SET body_weight = ? WHERE id = ?')->execute([bodyWeightParam($in['body_weight']), $id]);
+            if (array_key_exists('plan_id', $in)) $db->prepare('UPDATE workouts SET plan_id = ? WHERE id = ?')->execute([planIdParam($in['plan_id']), $id]);
             if (array_key_exists('date', $in)) {
                 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$in['date'])) fail('Ungültiges Datum');
                 $db->prepare('UPDATE workouts SET workout_date = ? WHERE id = ?')->execute([$in['date'], $id]);
             }
+            out(['ok' => true]);
+
+        case 'snapshot':
+            // Alle Daten auf einmal – Grundlage für den Offline-Modus der App
+            $ex = $db->query('SELECT id, name, mode, active FROM exercises ORDER BY sort_order, name')->fetchAll();
+            $wk = $db->query('SELECT id, workout_date, start_time, end_time, note, rpe, body_weight, plan_id FROM workouts')->fetchAll();
+            $st = $db->query('SELECT id, workout_id, exercise_id, set_no, weight_kg, reps, duration_s FROM sets')->fetchAll();
+            $pl = $db->query('SELECT id, name FROM plans ORDER BY name')->fetchAll();
+            $pe = [];
+            foreach ($db->query('SELECT plan_id, exercise_id FROM plan_exercises') as $r) $pe[(int)$r['plan_id']][] = (int)$r['exercise_id'];
+            out([
+                'exercises' => array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'mode' => $r['mode'], 'active' => (bool)$r['active']], $ex),
+                'workouts' => array_map(fn($r) => [
+                    'id' => (int)$r['id'], 'date' => $r['workout_date'], 'start_time' => hm($r['start_time']), 'end_time' => hm($r['end_time']),
+                    'note' => $r['note'], 'rpe' => $r['rpe'] === null ? null : (int)$r['rpe'],
+                    'body_weight' => $r['body_weight'] === null ? null : (float)$r['body_weight'],
+                    'plan_id' => $r['plan_id'] === null ? null : (int)$r['plan_id'],
+                ], $wk),
+                'sets' => array_map(fn($r) => [
+                    'id' => (int)$r['id'], 'workout_id' => (int)$r['workout_id'], 'exercise_id' => (int)$r['exercise_id'], 'set_no' => (int)$r['set_no'],
+                ] + setRow($r), $st),
+                'plans' => array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'exercises' => $pe[(int)$r['id']] ?? []], $pl),
+            ]);
+
+        case 'plan_create':
+            if (!$isPost) fail('POST erforderlich', 405);
+            $name = trim((string)($in['name'] ?? ''));
+            if ($name === '' || textLength($name) > 100) fail('Ungültiger Planname');
+            $db->beginTransaction();
+            $db->prepare('INSERT INTO plans (name) VALUES (?)')->execute([$name]);
+            $pid = (int)$db->lastInsertId();
+            setPlanExercises($db, $pid, (array)($in['exercises'] ?? []));
+            $db->commit();
+            out(['id' => $pid]);
+
+        case 'plan_update':
+            if (!$isPost) fail('POST erforderlich', 405);
+            $pid = intParam($in, 'id');
+            $db->beginTransaction();
+            if (array_key_exists('name', $in)) {
+                $name = trim((string)$in['name']);
+                if ($name === '' || textLength($name) > 100) fail('Ungültiger Planname');
+                $db->prepare('UPDATE plans SET name = ? WHERE id = ?')->execute([$name, $pid]);
+            }
+            if (array_key_exists('exercises', $in)) setPlanExercises($db, $pid, (array)$in['exercises']);
+            $db->commit();
+            out(['ok' => true]);
+
+        case 'plan_delete':
+            if (!$isPost) fail('POST erforderlich', 405);
+            $pid = intParam($in, 'id');
+            $db->prepare('UPDATE workouts SET plan_id = NULL WHERE plan_id = ?')->execute([$pid]);
+            $db->prepare('DELETE FROM plans WHERE id = ?')->execute([$pid]);
             out(['ok' => true]);
 
         case 'overview':
@@ -339,6 +435,7 @@ try {
             if ($weight !== null && (!is_numeric($weight) || $weight < 0 || $weight > 9999)) fail('Ungültiges Gewicht');
             if ($duration !== null && (!is_numeric($duration) || $duration <= 0 || $duration > 86400)) fail('Ungültige Zeit');
             $reps = $has('reps') ? (int)$in['reps'] : null;
+            if ($reps !== null && ($reps < 0 || $reps > 1000)) fail('Ungültige Wiederholungen');
             $db->beginTransaction();
             $n = $db->prepare('SELECT COALESCE(MAX(set_no), 0) + 1 FROM sets WHERE workout_id = ? AND exercise_id = ? FOR UPDATE');
             $n->execute([$wid, $eid]);

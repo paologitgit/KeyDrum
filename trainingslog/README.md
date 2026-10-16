@@ -17,11 +17,22 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Verlauf** (in jeder Übung über „Verlauf ›“): Bestwert, Anzahl Trainings, Diagramm des Höchstgewichts bzw. der längsten Zeit pro Training (Punkt antippen zeigt die Werte) und eine Liste aller Trainings.
 - **Ohne Server:** Ohne erreichbare `api.php` arbeitet die App im lokalen Modus (Speicherung im Browser), damit sie sich sofort ausprobieren lässt.
 
+### Weitere Funktionen
+
+- **Pausentimer:** Nach jedem Satz läuft unten eine Pause (Standard 90 s, einstellbar). Am Ende vibriert das Smartphone (Android) und es ertönt ein Ton.
+- **Fortschrittsvorschlag:** Wurden beim letzten Mal alle Sätze mit gleichem Gewicht und gleichen Wiederholungen geschafft, schlägt die App mehr vor (Standard +2,5 kg, bei Zeit-Übungen +5 s) und trägt den Wert gleich ein.
+- **Trainingspläne:** Unter „Pläne“ Übungsauswahlen anlegen (z. B. „Tag A“). Beim Start wählen; im Training lassen sich alle Übungen einblenden.
+- **Statistik:** Trainings, Trainingszeit und Volumen pro Woche (12 Wochen), Tagesform pro Training und nach Wochentag, Körpergewicht.
+- **Tagesform und Körpergewicht:** unter „Nach dem Training“.
+- **Export:** Unter „Einstellungen“ als CSV (Semikolon, für Excel/Numbers).
+- **Offline-Modus:** Alle Eingaben werden zuerst auf dem Gerät gespeichert und übertragen, sobald der Server erreichbar ist. Ein schwarzer Balken oben zeigt an, wie viele Einträge noch warten. `sw.js` hält die App-Dateien bereit, damit sich die App auch ohne Netz öffnen lässt (nur über HTTPS).
+
 ## Dateien
 
 | Datei | Zweck |
 |---|---|
-| `index.html` | Oberfläche (HTML/CSS/JS, keine externen Abhängigkeiten) |
+| `index.html` | Oberfläche (HTML/CSS/JS, Schriften von Google Fonts) |
+| `sw.js` | Service Worker für den Offline-Betrieb (neben `index.html` ablegen) |
 | `api.php` | JSON-Schnittstelle zu MySQL (PDO mit vorbereiteten Abfragen) |
 | `schema.sql` | Tabellen und Grundübungen |
 | `config.sample.php` | Vorlage für die Zugangsdaten → als `config.php` kopieren |
@@ -32,7 +43,9 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 
 ```
 exercises (id, name UNIQUE, mode 'weight'|'time', sort_order, active)
-workouts  (id, workout_date, start_time NULL, end_time NULL, note)
+workouts  (id, workout_date, start_time NULL, end_time NULL, note, rpe NULL, body_weight NULL, plan_id NULL)
+plans     (id, name)
+plan_exercises (plan_id → plans, exercise_id → exercises)
 sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg NULL, reps NULL, duration_s NULL)
 ```
 
@@ -47,7 +60,7 @@ sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weigh
 1. In der Hosting-Verwaltung eine Datenbank und einen Benutzer anlegen.
 2. `schema.sql` importieren (phpMyAdmin → Importieren, oder `mysql -u USER -p DB < schema.sql`).
 3. `config.sample.php` als `config.php` kopieren, Zugangsdaten und einen eigenen `app_token` eintragen.
-4. `index.html`, `api.php` und `config.php` in denselben Ordner hochladen (unbedingt über HTTPS).
+4. `index.html`, `sw.js`, `api.php` und `config.php` in denselben Ordner hochladen (unbedingt über HTTPS).
 5. Die Seite auf dem Smartphone öffnen, den Zugangscode (`app_token`) einmal eingeben und
    über „Zum Home-Bildschirm“ als App-Symbol ablegen.
 
@@ -77,7 +90,9 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `workouts` | GET | – |
 | `workout_create` | POST | `{date: "YYYY-MM-DD", start_time?: "HH:MM"}` |
 | `workout&id=` | GET | Training mit Sätzen, `previous` (letzte Werte je Übung) und `best` (bisheriger Bestwert je Übung) |
-| `workout_update` | POST | `{id, note?, date?, start_time?, end_time?}` (Uhrzeit „HH:MM“) |
+| `workout_update` | POST | `{id, note?, date?, start_time?, end_time?, rpe?, body_weight?, plan_id?}` |
+| `snapshot` | GET | alle Daten auf einmal (Grundlage für den Offline-Modus) |
+| `plan_create` / `plan_update` / `plan_delete` | POST | `{name, exercises}` / `{id, name?, exercises?}` / `{id}` |
 | `overview` | GET | letzte 5 Trainings mit ihren Übungen und letztes Datum je Übung |
 | `workout_delete` | POST | `{id}` |
 | `set_add` | POST | `{workout_id, exercise_id, weight?, reps?, duration?}` (Gewicht oder Dauer in Sekunden) |
@@ -90,5 +105,5 @@ Bei jeder Anfrage wird der Header `X-Token` mitgeschickt (aus `config.php`).
 1. **Phase 1 (umgesetzt):** Trainings, Sätze, Gewichte, Anzeige des letzten Trainings, Übungen direkt in der App ergänzen, MySQL-Anbindung, lokaler Modus.
 2. **Phase 2 (umgesetzt):** Übungen umbenennen, sortieren und ausblenden; Notiz und Datum pro Training bearbeiten.
 3. **Phase 3 (umgesetzt):** Verlauf pro Übung mit Diagramm (Höchstgewicht pro Training) und Markierung neuer Bestwerte.
-4. **Phase 4:** Offline-fähige App (Service Worker): Erfassen ohne Netz im Studio, später Abgleich mit dem Server. CSV-Export.
+4. **Phase 4 (umgesetzt):** Offline-Modus mit Abgleich, CSV-Export, Pausentimer, Fortschrittsvorschlag, Pläne, Wochenstatistik, Tagesform, Körpergewicht.
 5. **Optional:** Mehrere Personen (Tabelle `users`, Spalte `user_id` in `workouts`) mit richtigem Login statt Token.
