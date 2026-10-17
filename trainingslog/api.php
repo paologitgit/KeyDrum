@@ -70,6 +70,7 @@ function ensureSchema(PDO $db): void {
         $hasTimes = $hasColumn('workouts', 'start_time');
         $hasRpe = $hasColumn('workouts', 'rpe');
         $hasPlans = (bool)$db->query("SHOW TABLES LIKE 'plans'")->fetch();
+        $hasDistance = $hasColumn('sets', 'distance_km');
     } catch (PDOException $e) {
         return; // Tabellen fehlen – wird später mit klarer Meldung gemeldet
     }
@@ -83,6 +84,13 @@ function ensureSchema(PDO $db): void {
         }
         if (!$hasRpe) {
             $db->exec('ALTER TABLE workouts ADD COLUMN rpe TINYINT UNSIGNED NULL, ADD COLUMN body_weight DECIMAL(5,2) NULL, ADD COLUMN plan_id INT UNSIGNED NULL');
+        }
+        if (!$hasDistance) {
+            // Ausdauer: Distanz pro Eintrag, dazu die beiden Standard-Übungen
+            $db->exec('ALTER TABLE sets ADD COLUMN distance_km DECIMAL(7,2) NULL AFTER duration_s');
+            $max = (int)$db->query('SELECT COALESCE(MAX(sort_order), 0) FROM exercises')->fetchColumn();
+            $db->prepare("INSERT IGNORE INTO exercises (name, mode, sort_order) VALUES ('Fahrradfahren', 'cardio', ?), ('Joggen', 'cardio', ?)")
+               ->execute([$max + 10, $max + 20]);
         }
         if (!$hasPlans) {
             $db->exec("CREATE TABLE IF NOT EXISTS plans (
@@ -173,11 +181,13 @@ function setRow(array $r): array {
         'weight'   => $r['weight_kg'] === null ? null : (float)$r['weight_kg'],
         'reps'     => $r['reps'] === null ? null : (int)$r['reps'],
         'duration' => $r['duration_s'] === null ? null : (int)$r['duration_s'],
+        'distance' => ($r['distance_km'] ?? null) === null ? null : (float)$r['distance_km'],
     ];
 }
 
 function modeParam(array $src): string {
-    return ($src['mode'] ?? 'weight') === 'time' ? 'time' : 'weight';
+    $m = $src['mode'] ?? 'weight';
+    return in_array($m, ['time', 'cardio'], true) ? $m : 'weight';
 }
 
 function intParam(array $src, string $key): int {
@@ -367,7 +377,7 @@ try {
             // Alle Daten auf einmal – Grundlage für den Offline-Modus der App
             $ex = $db->query('SELECT id, name, mode, active FROM exercises ORDER BY sort_order, name')->fetchAll();
             $wk = $db->query('SELECT id, workout_date, start_time, end_time, note, rpe, body_weight, plan_id FROM workouts')->fetchAll();
-            $st = $db->query('SELECT id, workout_id, exercise_id, set_no, weight_kg, reps, duration_s FROM sets')->fetchAll();
+            $st = $db->query('SELECT id, workout_id, exercise_id, set_no, weight_kg, reps, duration_s, distance_km FROM sets')->fetchAll();
             $pl = $db->query('SELECT id, name FROM plans ORDER BY name')->fetchAll();
             $pe = [];
             foreach ($db->query('SELECT plan_id, exercise_id FROM plan_exercises') as $r) $pe[(int)$r['plan_id']][] = (int)$r['exercise_id'];
@@ -431,7 +441,9 @@ try {
             $has = fn($k) => isset($in[$k]) && $in[$k] !== '' && $in[$k] !== null;
             $weight = $has('weight') ? $in['weight'] : null;
             $duration = $has('duration') ? $in['duration'] : null;
-            if ($weight === null && $duration === null) fail('Bitte Gewicht oder Zeit angeben');
+            $distance = $has('distance') ? $in['distance'] : null;
+            if ($weight === null && $duration === null && $distance === null) fail('Bitte Gewicht, Zeit oder Distanz angeben');
+            if ($distance !== null && (!is_numeric($distance) || $distance < 0 || $distance > 99999)) fail('Ungültige Distanz');
             if ($weight !== null && (!is_numeric($weight) || $weight < 0 || $weight > 9999)) fail('Ungültiges Gewicht');
             if ($duration !== null && (!is_numeric($duration) || $duration <= 0 || $duration > 86400)) fail('Ungültige Zeit');
             $reps = $has('reps') ? (int)$in['reps'] : null;
@@ -440,8 +452,9 @@ try {
             $n = $db->prepare('SELECT COALESCE(MAX(set_no), 0) + 1 FROM sets WHERE workout_id = ? AND exercise_id = ? FOR UPDATE');
             $n->execute([$wid, $eid]);
             $setNo = (int)$n->fetchColumn();
-            $db->prepare('INSERT INTO sets (workout_id, exercise_id, set_no, weight_kg, reps, duration_s) VALUES (?, ?, ?, ?, ?, ?)')
-               ->execute([$wid, $eid, $setNo, $weight === null ? null : (float)$weight, $reps, $duration === null ? null : (int)$duration]);
+            $db->prepare('INSERT INTO sets (workout_id, exercise_id, set_no, weight_kg, reps, duration_s, distance_km) VALUES (?, ?, ?, ?, ?, ?, ?)')
+               ->execute([$wid, $eid, $setNo, $weight === null ? null : (float)$weight, $reps,
+                          $duration === null ? null : (int)$duration, $distance === null ? null : (float)$distance]);
             $id = (int)$db->lastInsertId();
             $db->commit();
             out(['id' => $id, 'set_no' => $setNo]);

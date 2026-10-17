@@ -19,6 +19,7 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 
 ### Weitere Funktionen
 
+- **Ausdauer:** Übungsart „Ausdauer“ mit Distanz (km) und Dauer, z. B. Fahrradfahren und Joggen (beide sind voreingestellt). Die App zeigt das Tempo als Pace (min/km, unter 15 km/h) oder als Geschwindigkeit (km/h). Bestwert = längste Strecke; im Verlauf Diagramme für Distanz und Tempo, in der Statistik die Kilometer pro Woche.
 - **Pausentimer:** Nach jedem Satz läuft unten eine Pause (Standard 90 s, einstellbar). Am Ende vibriert das Smartphone (Android) und es ertönt ein Ton.
 - **Fortschrittsvorschlag:** Wurden beim letzten Mal alle Sätze mit gleichem Gewicht und gleichen Wiederholungen geschafft, schlägt die App mehr vor (Standard +2,5 kg, bei Zeit-Übungen +5 s) und trägt den Wert gleich ein.
 - **Trainingspläne:** Unter „Pläne“ Übungsauswahlen anlegen (z. B. „Tag A“). Beim Start wählen; im Training lassen sich alle Übungen einblenden.
@@ -42,11 +43,11 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 ## Datenmodell
 
 ```
-exercises (id, name UNIQUE, mode 'weight'|'time', sort_order, active)
+exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', sort_order, active)
 workouts  (id, workout_date, start_time NULL, end_time NULL, note, rpe NULL, body_weight NULL, plan_id NULL)
 plans     (id, name)
 plan_exercises (plan_id → plans, exercise_id → exercises)
-sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg NULL, reps NULL, duration_s NULL)
+sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg NULL, reps NULL, duration_s NULL, distance_km NULL)
 ```
 
 - Ein Training (`workouts`) hat beliebig viele Sätze (`sets`).
@@ -95,7 +96,7 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `plan_create` / `plan_update` / `plan_delete` | POST | `{name, exercises}` / `{id, name?, exercises?}` / `{id}` |
 | `overview` | GET | letzte 5 Trainings mit ihren Übungen und letztes Datum je Übung |
 | `workout_delete` | POST | `{id}` |
-| `set_add` | POST | `{workout_id, exercise_id, weight?, reps?, duration?}` (Gewicht oder Dauer in Sekunden) |
+| `set_add` | POST | `{workout_id, exercise_id, weight?, reps?, duration?, distance?}` (Gewicht, Dauer in Sekunden und/oder Distanz in km) |
 | `set_delete` | POST | `{id}` |
 
 Bei jeder Anfrage wird der Header `X-Token` mitgeschickt (aus `config.php`).

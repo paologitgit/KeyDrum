@@ -98,6 +98,8 @@
   .add-set { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 14px; }
   .add-set label { white-space: nowrap; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); display: block; margin-bottom: 4px; }
   .add-set button { align-self: end; }
+  .add-set.four { grid-template-columns: 1.2fr 1fr 1fr auto; }
+  .add-set.four button { padding: 11px 18px; font-size: 22px; }
   .ex-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
   .hist { text-transform: uppercase; letter-spacing: .1em; font-size: 13px; }
   .copy { text-decoration: underline; text-underline-offset: 3px; }
@@ -224,7 +226,7 @@
 // ---------- Konfiguration ----------
 const API_URL = 'api.php';          // Pfad zur PHP-API
 const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
-  'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse'];
+  'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse', 'Fahrradfahren:cardio', 'Joggen:cardio'];
 
 // ---------- Hilfsfunktionen ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -233,15 +235,27 @@ const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getT
 const fmtDate = iso => { const [y, m, d] = iso.split('-'); const wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(+y, m - 1, +d).getDay()]; return `${wd}, ${d}.${m}.${y}`; };
 const fmtShort = iso => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
 const fmtW = w => (Math.round(w * 100) / 100).toString().replace('.', ',');
-// Zeit: 45 → "45 s", 90 → "1:30 min"
-const fmtDur = sec => { const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}:${String(r).padStart(2, '0')} min` : `${r} s`; };
+// Zeit: 45 → "45 s", 90 → "1:30 min", 5400 → "1:30 h"
+const fmtDur = sec => {
+  if (sec >= 3600) { const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60); return `${h}:${String(m).padStart(2, '0')} h`; }
+  const m = Math.floor(sec / 60), r = sec % 60; return m ? `${m}:${String(r).padStart(2, '0')} min` : `${r} s`;
+};
+// Ausdauer: Tempo als Pace (min/km) bis 15 km/h, darüber als Geschwindigkeit (km/h)
+const speedOf = s => s.distance && s.duration ? s.distance / (s.duration / 3600) : null;
+const fmtPace = s => {
+  const v = speedOf(s); if (!v) return '';
+  if (v >= 15) return `${fmtW(Math.round(v * 10) / 10)} km/h`;
+  const p = Math.round(s.duration / s.distance); return `${Math.floor(p / 60)}:${String(p % 60).padStart(2, '0')} /km`;
+};
 const fmtSet = s => {
+  if (s.distance != null) return [`${fmtW(s.distance)} km`, s.duration ? fmtDur(s.duration) : '', fmtPace(s)].filter(Boolean).join(' · ');
   if (s.duration != null) return (s.weight ? `${fmtW(s.weight)} kg · ` : '') + fmtDur(s.duration);
   return s.reps ? `${fmtW(s.weight)} kg × ${s.reps}` : `${fmtW(s.weight)} kg`;
 };
-// Übungsart: 'weight' (kg × Wdh.) oder 'time' (Dauer). Kennzahl für Bestwert und Diagramm.
-const metricKey = mode => mode === 'time' ? 'duration' : 'weight';
-const fmtMetric = (mode, v) => mode === 'time' ? fmtDur(v) : `${fmtW(v)} kg`;
+// Übungsart: 'weight' (kg × Wdh.), 'time' (Dauer) oder 'cardio' (Distanz + Dauer). Kennzahl für Bestwert und Diagramm.
+const MODES = { weight: 'Gewicht', time: '⏱ Zeit', cardio: 'Ausdauer' };
+const metricKey = mode => ({ time: 'duration', cardio: 'distance' })[mode] || 'weight';
+const fmtMetric = (mode, v) => mode === 'time' ? fmtDur(v) : mode === 'cardio' ? `${fmtW(v)} km` : `${fmtW(v)} kg`;
 const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 // Minuten zwischen zwei Uhrzeiten "HH:MM" (über Mitternacht hinweg)
 const minutesBetween = (a, b) => { const [ah, am] = a.split(':').map(Number), [bh, bm] = b.split(':').map(Number); let m = bh * 60 + bm - (ah * 60 + am); return m < 0 ? m + 1440 : m; };
@@ -252,8 +266,9 @@ const bestOf = (mode, sets) => Math.max(...sets.map(s => s[metricKey(mode)] ?? -
 // Auswahl beim Anlegen einer Übung: Gewicht oder Zeit
 const modePicker = name => `
   <div class="seg" role="radiogroup" aria-label="Erfassen mit">
-    <label><input type="radio" name="${name}" value="weight" checked><span>Gewicht (kg × Wdh.)</span></label>
+    <label><input type="radio" name="${name}" value="weight" checked><span>Gewicht</span></label>
     <label><input type="radio" name="${name}" value="time"><span>Zeit</span></label>
+    <label><input type="radio" name="${name}" value="cardio"><span>Ausdauer</span></label>
   </div>`;
 const pickedMode = name => document.querySelector(`input[name="${name}"]:checked`)?.value || 'weight';
 
@@ -262,9 +277,10 @@ function summarize(sets) {
   const groups = [];
   for (const s of sets) {
     const key = fmtSet(s), last = groups[groups.length - 1];
-    if (last && last.key === key) last.n++; else groups.push({ key, n: 1 });
+    if (last && last.key === key) last.n++; else groups.push({ key, n: 1, cardio: s.distance != null });
   }
-  return groups.map(g => `${g.n} × ${g.key}`).join(' · ');
+  // Ausdauer-Einheit einzeln: ohne „1 ×“
+  return groups.map(g => g.cardio && g.n === 1 ? g.key : `${g.n} × ${g.key}`).join(' · ');
 }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
 
@@ -328,7 +344,7 @@ const ApiStore = {
   createWorkout(date, start_time = null, plan_id = null) { return this.call('workout_create', {}, { date, start_time, plan_id }); },
   updateWorkout(id, fields) { return this.call('workout_update', {}, { id, ...fields }); },
   deleteWorkout(id) { return this.call('workout_delete', {}, { id }); },
-  addSet(workout_id, exercise_id, weight, reps, duration = null) { return this.call('set_add', {}, { workout_id, exercise_id, weight, reps, duration }); },
+  addSet(workout_id, exercise_id, weight, reps, duration = null, distance = null) { return this.call('set_add', {}, { workout_id, exercise_id, weight, reps, duration, distance }); },
   deleteSet(id) { return this.call('set_delete', {}, { id }); },
   createPlan(name, exercises = []) { return this.call('plan_create', {}, { name, exercises }); },
   updatePlan(id, fields) { return this.call('plan_update', {}, { id, ...fields }); },
@@ -348,7 +364,7 @@ function makeLocalStore(key, offlineIds) {
       try { db = JSON.parse(localStorage.getItem(key)); } catch {}
       if (!db) db = offlineIds
         ? { seq: 0, exercises: [], workouts: [], sets: [], plans: [] }
-        : { seq: 1000, exercises: DEFAULT_EXERCISES.map((name, i) => ({ id: i + 1, name })), workouts: [], sets: [], plans: [] };
+        : { seq: 1000, exercises: DEFAULT_EXERCISES.map((n, i) => { const [name, mode = 'weight'] = n.split(':'); return { id: i + 1, name, mode }; }), workouts: [], sets: [], plans: [] };
       if (!offlineIds && !db.seq) db.seq = 1000;
       db.plans ||= [];
       for (const e of db.exercises) { if (e.active === undefined) e.active = true; if (!e.mode) e.mode = 'weight'; }
@@ -378,7 +394,7 @@ function makeLocalStore(key, offlineIds) {
         ex.name = fields.name;
       }
       if ('active' in fields) ex.active = !!fields.active;
-      if ('mode' in fields) ex.mode = fields.mode === 'time' ? 'time' : 'weight';
+      if ('mode' in fields) ex.mode = MODES[fields.mode] ? fields.mode : 'weight';
       this.save(db);
     },
     async reorderExercises(ids) {
@@ -390,7 +406,7 @@ function makeLocalStore(key, offlineIds) {
       const db = this.load();
       return db.workouts.slice().sort(this.byDate).map(w => ({
         workout_id: w.id, date: w.date,
-        sets: db.sets.filter(s => s.workout_id === w.id && s.exercise_id === exercise_id).sort((a, b) => a.set_no - b.set_no).map(s => ({ weight: s.weight, reps: s.reps, duration: s.duration ?? null })),
+        sets: db.sets.filter(s => s.workout_id === w.id && s.exercise_id === exercise_id).sort((a, b) => a.set_no - b.set_no).map(s => ({ weight: s.weight, reps: s.reps, duration: s.duration ?? null, distance: s.distance ?? null })),
       })).filter(h => h.sets.length);
     },
 
@@ -443,11 +459,11 @@ function makeLocalStore(key, offlineIds) {
       for (const ex of db.exercises) {
         for (const pw of earlier) {
           const s = db.sets.filter(x => x.workout_id === pw.id && x.exercise_id === ex.id).sort((a, b) => a.set_no - b.set_no);
-          if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps, duration: x.duration ?? null })) }; break; }
+          if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps, duration: x.duration ?? null, distance: x.distance ?? null })) }; break; }
         }
         const es = db.sets.filter(x => x.exercise_id === ex.id && earlierIds.has(x.workout_id));
         const maxOf = k => { const v = es.map(x => x[k]).filter(v => v != null); return v.length ? Math.max(...v) : null; };
-        if (es.length) best[ex.id] = { weight: maxOf('weight'), duration: maxOf('duration') };
+        if (es.length) best[ex.id] = { weight: maxOf('weight'), duration: maxOf('duration'), distance: maxOf('distance') };
       }
       return {
         ...w, plan: db.plans.find(p => p.id === w.plan_id) || null,
@@ -463,10 +479,10 @@ function makeLocalStore(key, offlineIds) {
       this.save(db);
     },
     async deleteWorkout(id) { const db = this.load(); db.workouts = db.workouts.filter(w => w.id !== id); db.sets = db.sets.filter(s => s.workout_id !== id); this.save(db); },
-    async addSet(workout_id, exercise_id, weight, reps, duration = null) {
+    async addSet(workout_id, exercise_id, weight, reps, duration = null, distance = null) {
       const db = this.load();
       const set_no = db.sets.filter(s => s.workout_id === workout_id && s.exercise_id === exercise_id).reduce((m, s) => Math.max(m, s.set_no), 0) + 1;
-      const s = { id: this.nextId(db), workout_id, exercise_id, set_no, weight, reps, duration }; db.sets.push(s); this.save(db); return s;
+      const s = { id: this.nextId(db), workout_id, exercise_id, set_no, weight, reps, duration, distance }; db.sets.push(s); this.save(db); return s;
     },
     async deleteSet(id) { const db = this.load(); db.sets = db.sets.filter(s => s.id !== id); this.save(db); },
 
@@ -479,6 +495,7 @@ function makeLocalStore(key, offlineIds) {
           id: w.id, date: w.date, rpe: w.rpe ?? null, body_weight: w.body_weight ?? null,
           minutes: w.start_time && w.end_time ? minutesBetween(w.start_time, w.end_time) : null,
           volume: s.reduce((sum, x) => sum + (x.weight && x.reps ? x.weight * x.reps : 0), 0),
+          distance: s.reduce((sum, x) => sum + (x.distance || 0), 0),
           set_count: s.length,
         };
       });
@@ -489,16 +506,16 @@ function makeLocalStore(key, offlineIds) {
       const exById = Object.fromEntries(db.exercises.map(e => [e.id, e]));
       const planById = Object.fromEntries(db.plans.map(p => [p.id, p.name]));
       const num = v => v == null ? '' : fmtW(v);
-      const rows = [['Datum', 'Start', 'Ende', 'Dauer (min)', 'Tagesform', 'Körpergewicht (kg)', 'Plan', 'Notiz', 'Übung', 'Art', 'Satz', 'Gewicht (kg)', 'Wdh.', 'Zeit (s)']];
+      const rows = [['Datum', 'Start', 'Ende', 'Dauer (min)', 'Tagesform', 'Körpergewicht (kg)', 'Plan', 'Notiz', 'Übung', 'Art', 'Satz', 'Gewicht (kg)', 'Wdh.', 'Zeit (s)', 'Distanz (km)']];
       for (const w of db.workouts.slice().sort(this.byDate)) {
         const head = [w.date, w.start_time || '', w.end_time || '', w.start_time && w.end_time ? minutesBetween(w.start_time, w.end_time) : '',
           w.rpe ?? '', num(w.body_weight), planById[w.plan_id] || '', w.note || ''];
         const sets = db.sets.filter(s => s.workout_id === w.id)
           .sort((a, b) => db.exercises.indexOf(exById[a.exercise_id]) - db.exercises.indexOf(exById[b.exercise_id]) || a.set_no - b.set_no);
-        if (!sets.length) rows.push([...head, '', '', '', '', '', '']);
+        if (!sets.length) rows.push([...head, '', '', '', '', '', '', '']);
         for (const s of sets) {
           const ex = exById[s.exercise_id];
-          rows.push([...head, ex?.name || '', ex?.mode === 'time' ? 'Zeit' : 'Gewicht', s.set_no, num(s.weight), s.reps ?? '', s.duration ?? '']);
+          rows.push([...head, ex?.name || '', { time: 'Zeit', cardio: 'Ausdauer' }[ex?.mode] || 'Gewicht', s.set_no, num(s.weight), s.reps ?? '', s.duration ?? '', num(s.distance)]);
         }
       }
       return rows;
@@ -910,6 +927,7 @@ async function showWorkout(id) {
     const sug = !cur.length ? suggestion(modeOf[ex.id], prev?.sets) : null;
     // Vorbelegung: letzter Satz heute, sonst Vorschlag, sonst letzter Satz vom letzten Mal
     const fill = cur.length ? cur[cur.length - 1] : (sug ? { weight: sug.weight, reps: sug.reps, duration: sug.duration } : prev?.sets[prev.sets.length - 1]);
+    const cardio = modeOf[ex.id] === 'cardio';
     const open = state.open.has(ex.id);
     const hasPr = cur.some(s => isPr(ex.id, s));
     const timeMode = modeOf[ex.id] === 'time';
@@ -937,9 +955,15 @@ async function showWorkout(id) {
         <div><strong>Heute</strong></div>
         <div class="chips">
           ${cur.length ? cur.map((s, i) => `<span class="chip ${isPr(ex.id, s) ? 'pr' : ''}">${isPr(ex.id, s) ? '★ ' : ''}${i + 1}. ${fmtSet(s)}<button class="x" data-del="${s.id}" aria-label="Satz löschen">×</button></span>`).join('')
-            : '<span class="muted">Noch keine Sätze</span>'}
+            : `<span class="muted">${cardio ? 'Noch keine Einträge' : 'Noch keine Sätze'}</span>`}
         </div>
-        ${timeMode ? `
+        ${cardio ? `
+        <div class="add-set four">
+          <div><label>km</label><input class="km" inputmode="decimal" value="${fill?.distance != null ? fmtW(fill.distance) : ''}" placeholder="0"></div>
+          <div><label>Min</label><input class="mi" inputmode="numeric" value="${fillDur !== null ? Math.floor(fillDur / 60) : ''}" placeholder="0"></div>
+          <div><label>Sek</label><input class="se" inputmode="numeric" value="${fillDur !== null ? fillDur % 60 : ''}" placeholder="0"></div>
+          <button class="primary add">+</button>
+        </div>` : timeMode ? `
         <div class="add-set">
           <div><label>Minuten</label><input class="mi" inputmode="numeric" value="${fillDur !== null ? Math.floor(fillDur / 60) : ''}" placeholder="0"></div>
           <div><label>Sekunden</label><input class="se" inputmode="numeric" value="${fillDur !== null ? fillDur % 60 : ''}" placeholder="0"></div>
@@ -1024,7 +1048,13 @@ async function showWorkout(id) {
     };
     $('.add', card).onclick = async () => {
       let set;
-      if (modeOf[exId] === 'time') {
+      if (modeOf[exId] === 'cardio') {
+        const km = parseNum($('.km', card).value), mi = parseNum($('.mi', card).value) || 0, se = parseNum($('.se', card).value) || 0;
+        const duration = Math.round(mi * 60 + se);
+        if (km === null || km <= 0) return toast('Bitte Distanz eingeben');
+        if (mi < 0 || se < 0) return toast('Bitte gültige Dauer eingeben');
+        set = { weight: null, reps: null, duration: duration || null, distance: km };
+      } else if (modeOf[exId] === 'time') {
         const mi = parseNum($('.mi', card).value) || 0, se = parseNum($('.se', card).value) || 0;
         const duration = Math.round(mi * 60 + se);
         if (mi < 0 || se < 0 || duration <= 0) return toast('Bitte Zeit eingeben');
@@ -1036,9 +1066,9 @@ async function showWorkout(id) {
         set = { weight, reps: reps ? Math.round(reps) : null, duration: null };
       }
       try {
-        await store.addSet(id, exId, set.weight, set.reps, set.duration);
-        if (isPr(exId, set)) toast('Neuer Bestwert!');
-        Rest.start();
+        await store.addSet(id, exId, set.weight, set.reps, set.duration, set.distance ?? null);
+        if (isPr(exId, set)) toast(modeOf[exId] === 'cardio' ? 'Neuer Bestwert: längste Strecke!' : 'Neuer Bestwert!');
+        if (modeOf[exId] !== 'cardio') Rest.start();   // nach Ausdauer keine Satzpause
         state.open.add(exId); showWorkout(id);
       } catch (e) { showError(e); }
     };
@@ -1046,7 +1076,7 @@ async function showWorkout(id) {
     const copy = $('.copy', card);
     if (copy) copy.onclick = async () => {
       try {
-        for (const s of w.previous[exId].sets) await store.addSet(id, exId, s.weight, s.reps, s.duration ?? null);
+        for (const s of w.previous[exId].sets) await store.addSet(id, exId, s.weight, s.reps, s.duration ?? null, s.distance ?? null);
         state.open.add(exId); showWorkout(id);
       } catch (e) { showError(e); }
     };
@@ -1079,12 +1109,12 @@ async function showExercises() {
   try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
-    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“ oder „Zeit“ legt fest, wie die Übung erfasst wird (antippen zum Wechseln). Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
     <div class="card">
       ${active.map((e, i) => `
         <div class="mng" data-id="${e.id}">
           <input class="nm" value="${esc(e.name)}" maxlength="100" aria-label="Name">
-          <button class="mode-btn" aria-label="Erfassung: ${e.mode === 'time' ? 'Zeit' : 'Gewicht'} – antippen zum Wechseln">${e.mode === 'time' ? '⏱ Zeit' : 'Gewicht'}</button>
+          <button class="mode-btn" aria-label="Erfassung: ${MODES[e.mode] || MODES.weight} – antippen zum Wechseln">${MODES[e.mode] || MODES.weight}</button>
           <button class="up" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
           <button class="down" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
           <button class="hide-btn" aria-label="Ausblenden" title="Ausblenden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
@@ -1118,8 +1148,8 @@ async function showExercises() {
       catch (e) { nm.value = active[idx].name; showError(e); }
     };
     $('.mode-btn', row).onclick = async () => {
-      const mode = active[idx].mode === 'time' ? 'weight' : 'time';
-      try { await store.updateExercise(exId, { mode }); toast(mode === 'time' ? 'Wird mit Zeit erfasst' : 'Wird mit Gewicht erfasst'); showExercises(); } catch (e) { showError(e); }
+      const order = Object.keys(MODES), mode = order[(order.indexOf(active[idx].mode || 'weight') + 1) % order.length];
+      try { await store.updateExercise(exId, { mode }); toast({ weight: 'Wird mit Gewicht erfasst', time: 'Wird mit Zeit erfasst', cardio: 'Wird mit Distanz und Dauer erfasst' }[mode]); showExercises(); } catch (e) { showError(e); }
     };
     $('.up', row).onclick = () => move(idx, -1);
     $('.down', row).onclick = () => move(idx, 1);
@@ -1201,13 +1231,13 @@ async function showStats() {
   const WEEKS = 12, thisMonday = mondayOf(today());
   const weeks = Array.from({ length: WEEKS }, (_, i) => {
     const [y, m, d] = thisMonday.split('-').map(Number), dt = new Date(y, m - 1, d - 7 * (WEEKS - 1 - i));
-    return { start: isoDate(dt), count: 0, minutes: 0, volume: 0 };
+    return { start: isoDate(dt), count: 0, minutes: 0, volume: 0, distance: 0 };
   });
   const byStart = Object.fromEntries(weeks.map(w => [w.start, w]));
   for (const t of list) {
     const wk = byStart[mondayOf(t.date)];
     if (!wk) continue;
-    wk.count++; wk.minutes += t.minutes || 0; wk.volume += t.volume;
+    wk.count++; wk.minutes += t.minutes || 0; wk.volume += t.volume; wk.distance += t.distance || 0;
   }
   const last4 = weeks.slice(-4).reduce((s, w) => s + w.count, 0);
   const withMin = list.filter(t => t.minutes), withRpe = list.filter(t => t.rpe), withBw = list.filter(t => t.body_weight);
@@ -1229,7 +1259,8 @@ async function showStats() {
     ${weeks.some(w => w.minutes) ? `<div class="card chart-card"><h3>Trainingszeit pro Woche</h3><div id="cTime"></div><div class="tip"></div></div>`
       : '<div class="card pad muted">Trainingszeit: Erscheint, sobald Trainings mit Start und Ende („Training beendet“) erfasst sind.</div>'}
     <div class="card chart-card"><h3>Volumen pro Woche (kg)</h3><div id="cVol"></div><div class="tip"></div>
-      <p class="muted chart-note">Gewicht × Wiederholungen aller Sätze. Sätze ohne Wiederholungen und Zeit-Übungen zählen nicht.</p></div>
+      <p class="muted chart-note">Gewicht × Wiederholungen aller Sätze. Sätze ohne Wiederholungen, Zeit- und Ausdauer-Übungen zählen nicht.</p></div>
+    ${list.some(t => t.distance) ? `<div class="card chart-card"><h3>Ausdauer pro Woche (km)</h3><div id="cKm"></div><div class="tip"></div></div>` : ''}
     ${withRpe.length ? `
     <div class="card chart-card"><h3>Tagesform pro Training</h3><div id="cRpe"></div><div class="tip"></div></div>
     <div class="card pad">
@@ -1247,6 +1278,8 @@ async function showStats() {
     { axisFmt: m => `${fmtW(m / 60)} h`, steps: [30, 60, 120, 180, 300, 600] });
   drawBars($('#cVol'), tipOf('cVol'), weeks.map(w => ({ label: weekLabel(w), value: w.volume, tip: `${weekLabel(w)}<br><strong>${fmtInt(w.volume)} kg</strong>` })),
     { axisFmt: v => v >= 1000 ? `${fmtW(Math.round(v / 100) / 10)}k` : fmtInt(v), steps: [100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000] });
+  if ($('#cKm')) drawBars($('#cKm'), tipOf('cKm'), weeks.map(w => ({ label: weekLabel(w), value: w.distance, tip: `${weekLabel(w)}<br><strong>${fmtW(Math.round(w.distance * 10) / 10)} km</strong>` })),
+    { axisFmt: v => fmtW(v), steps: [1, 2, 5, 10, 20, 25, 50, 100, 200, 500] });
   if (withRpe.length) drawChart($('#cRpe'), tipOf('cRpe'), withRpe.map(t => ({ date: t.date, max: t.rpe })),
     { fmt: v => `${v}/10`, axisFmt: v => String(v), steps: [1, 2], range: [0, 10], label: 'Tagesform pro Training' });
   if (withBw.length) drawChart($('#cBw'), tipOf('cBw'), withBw.map(t => ({ date: t.date, max: t.body_weight })),
@@ -1321,16 +1354,26 @@ async function showHistory(exId) {
   const best = runningBest;
   if (!points.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine passenden Sätze erfasst.</div>'; return; }
 
+  // Ausdauer: Gesamtstrecke und Durchschnittstempo pro Einheit
+  const cardio = mode === 'cardio';
+  const totalKm = cardio ? points.reduce((s, p) => s + p.sets.reduce((t, x) => t + (x.distance || 0), 0), 0) : 0;
+  const speedPts = cardio ? points.map(p => {
+    const km = p.sets.reduce((t, x) => t + (x.distance || 0), 0), sec = p.sets.reduce((t, x) => t + (x.duration || 0), 0);
+    return km && sec ? { date: p.date, max: km / (sec / 3600), km, sec } : null;
+  }).filter(Boolean) : [];
+  const runner = speedPts.length && speedPts.reduce((s, p) => s + p.max, 0) / speedPts.length < 15;   // Pace statt km/h
   app.innerHTML = `
-    <div class="stats">
-      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">Bestwert</div></div>
-      <div class="card stat"><div class="v">${points.length}</div><div class="l">Trainings</div></div>
+    <div class="stats ${cardio ? 'stats3' : ''}">
+      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">${cardio ? 'Längste Strecke' : 'Bestwert'}</div></div>
+      <div class="card stat"><div class="v">${points.length}</div><div class="l">${cardio ? 'Einheiten' : 'Trainings'}</div></div>
+      ${cardio ? `<div class="card stat"><div class="v">${totalKm >= 1000 ? fmtInt(totalKm) : fmtW(Math.round(totalKm * 10) / 10)}</div><div class="l">km gesamt</div></div>` : ''}
     </div>
     <div class="card chart-card">
-      <h3>${mode === 'time' ? 'Längste Zeit pro Training' : 'Höchstgewicht pro Training (kg)'}</h3>
+      <h3>${{ time: 'Längste Zeit pro Training', cardio: 'Distanz pro Einheit (km)' }[mode] || 'Höchstgewicht pro Training (kg)'}</h3>
       <div id="chart"></div>
       <div class="tip" id="tip"></div>
     </div>
+    ${speedPts.length ? `<div class="card chart-card"><h3>${runner ? 'Pace pro Einheit (min/km)' : 'Ø Geschwindigkeit (km/h)'}</h3><div id="chart2"></div><div class="tip" id="tip2"></div></div>` : ''}
     <h2>Alle Trainings</h2>
     <div class="card">
       ${points.slice().reverse().map(p => `
@@ -1343,7 +1386,14 @@ async function showHistory(exId) {
         </div>`).join('')}
     </div>`;
   app.querySelectorAll('[data-w]').forEach(el => el.onclick = () => go(`#w${el.dataset.w}`));
-  drawChart($('#chart'), $('#tip'), points, mode === 'time'
+  if (speedPts.length) {
+    drawChart($('#chart2'), $('#tip2'), runner ? speedPts.map(p => ({ ...p, max: Math.round(p.sec / p.km) })) : speedPts, runner
+      ? { fmt: v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')} /km`, axisFmt: v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`, steps: [5, 10, 15, 30, 60, 120], extra: p => `${fmtW(p.km)} km`, label: 'Pace pro Einheit' }
+      : { fmt: v => `${fmtW(Math.round(v * 10) / 10)} km/h`, axisFmt: v => fmtW(v), steps: [0.5, 1, 2, 5, 10], extra: p => `${fmtW(p.km)} km`, label: 'Geschwindigkeit pro Einheit' });
+  }
+  drawChart($('#chart'), $('#tip'), points, mode === 'cardio'
+    ? { fmt: v => `${fmtW(v)} km`, axisFmt: fmtW, steps: [0.5, 1, 2, 5, 10, 20, 25, 50, 100], extra: p => p.sets.length > 1 ? `${p.sets.length} Einträge` : (p.sets[0].duration ? fmtDur(p.sets[0].duration) : ''), label: 'Distanz pro Einheit' }
+    : mode === 'time'
     ? { fmt: v => fmtDur(v), axisFmt: v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`, steps: [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600], extra: p => `${p.sets.length} Sätze`, label: 'Längste Zeit pro Training' }
     : { fmt: v => `${fmtW(v)} kg`, axisFmt: fmtW, steps: [1, 2, 2.5, 5, 10, 20, 25, 50, 100], extra: p => `${p.sets.length} Sätze`, label: 'Höchstgewicht pro Training' });
 }

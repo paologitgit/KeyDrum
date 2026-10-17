@@ -22,3 +22,7 @@ CREATE TABLE IF NOT EXISTS plan_exercises (
   CONSTRAINT fk_pe_plan FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
   CONSTRAINT fk_pe_exercise FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 4) Ausdauer: Distanz pro Eintrag und die Übungen Fahrradfahren / Joggen
+ALTER TABLE sets ADD COLUMN distance_km DECIMAL(7,2) NULL AFTER duration_s;
+INSERT IGNORE INTO exercises (name, mode, sort_order) VALUES ('Fahrradfahren', 'cardio', 1000), ('Joggen', 'cardio', 1010);
