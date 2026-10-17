@@ -22,6 +22,14 @@ function check($label, $ok, $detail) {
 
 check('PHP-Version', version_compare(PHP_VERSION, '7.4.0', '>='),
       PHP_VERSION . (version_compare(PHP_VERSION, '7.4.0', '>=') ? '' : ' – mindestens 7.4 nötig (in der Hosting-Verwaltung umstellen)'));
+// Version von api.php (muss zur index.html passen)
+$apiSrc = @file_get_contents(dirname(__FILE__) . '/api.php');
+$apiVer = ($apiSrc && preg_match('/const API_VERSION = (\d+);/', $apiSrc, $mm)) ? (int)$mm[1] : 0;
+$htmlSrc = @file_get_contents(dirname(__FILE__) . '/index.html');
+$needVer = ($htmlSrc && preg_match('/const API_VERSION_NEEDED = (\d+);/', $htmlSrc, $mm)) ? (int)$mm[1] : 0;
+check('api.php', $apiVer >= $needVer && $apiVer > 0, $apiVer
+    ? "Version $apiVer" . ($apiVer < $needVer ? " – index.html braucht Version $needVer: bitte die neue api.php hochladen" : '')
+    : 'veraltet oder nicht gefunden – bitte die neue api.php hochladen');
 check('PDO MySQL', extension_loaded('pdo_mysql'), extension_loaded('pdo_mysql') ? 'vorhanden' : 'fehlt – beim Hoster aktivieren');
 
 $cfgFile = dirname(__FILE__) . '/config.php';
@@ -77,6 +85,23 @@ if ($cfg) {
             } catch (PDOException $e) {
                 check("Tabelle $t", false, 'fehlt – schema.sql importieren');
             }
+        }
+        // Stand der Datenbank (wird von api.php beim ersten Aufruf automatisch erweitert)
+        $col = function ($t, $c) use ($db) { try { return (bool)$db->query("SHOW COLUMNS FROM `$t` LIKE " . $db->quote($c))->fetch(); } catch (Exception $e) { return false; } };
+        $features = array(
+            'Zeit-Übungen' => $col('exercises', 'mode'),
+            'Trainingsdauer' => $col('workouts', 'start_time'),
+            'Tagesform, Körpergewicht, Pläne' => $col('workouts', 'rpe'),
+            'Ausdauer (Distanz)' => $col('sets', 'distance_km'),
+        );
+        $missing = array_keys(array_filter($features, function ($v) { return !$v; }));
+        check('Datenbank-Stand', !$missing, $missing
+            ? 'es fehlt: ' . implode(', ', $missing) . ' – die App einmal öffnen (api.php ergänzt das selbst) oder migrate.sql importieren'
+            : 'aktuell');
+        if ($features['Ausdauer (Distanz)']) {
+            $cardio = $db->query("SELECT name, active FROM exercises WHERE mode = 'cardio' ORDER BY sort_order")->fetchAll(PDO::FETCH_ASSOC);
+            $names = array_map(function ($r) { return htmlspecialchars($r['name']) . ($r['active'] ? '' : ' (ausgeblendet)'); }, $cardio);
+            check('Ausdauer-Übungen', (bool)$cardio, $cardio ? implode(', ', $names) : 'keine – in der App unter „Übungen“ mit Art „Ausdauer“ anlegen');
         }
     } catch (PDOException $e) {
         check('Datenbankverbindung', false, 'fehlgeschlagen: ' . htmlspecialchars($e->getMessage()));

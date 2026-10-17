@@ -1,6 +1,8 @@
 <?php
 // Trainingslog – JSON-API (PHP 7.4+ / 8.x, PDO MySQL)
 declare(strict_types=1);
+// Version der Schnittstelle – index.html prüft, ob der Server aktuell genug ist
+const API_VERSION = 6;
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -243,7 +245,7 @@ function previousBest(PDO $db, int $workoutId): array {
 try {
     switch ($action) {
         case 'ping':
-            out(['ok' => true]);
+            out(['ok' => true, 'version' => API_VERSION]);
 
         case 'exercises':
             $where = empty($_GET['all']) ? 'WHERE active = 1' : '';

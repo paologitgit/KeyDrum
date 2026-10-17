@@ -66,6 +66,8 @@
   .row { display: flex; gap: 8px; align-items: center; }
   .muted { color: var(--muted); font-size: 14px; }
   .banner { font-size: 13px; padding: 8px 12px; border: 1.5px dashed var(--line); margin-bottom: 14px; }
+  .banner.warn { border: 2px solid var(--pr); color: var(--text); background: var(--card); }
+  .banner.warn strong { color: var(--pr-text); }
   .pad { padding: 14px; }
   .pad label, .field-label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin-bottom: 6px; }
   .pad .field + .field { margin-top: 12px; }
@@ -225,6 +227,7 @@
 <script>
 // ---------- Konfiguration ----------
 const API_URL = 'api.php';          // Pfad zur PHP-API
+const API_VERSION_NEEDED = 6;       // muss zu API_VERSION in api.php passen
 const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
   'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse', 'Fahrradfahren:cardio', 'Joggen:cardio'];
 
@@ -615,10 +618,12 @@ function remapView() {
 }
 
 let store = PlainStore;
+let serverOutdated = false;   // api.php älter als diese index.html
 async function pickStore() {
   if (!navigator.onLine && Cache.hasData()) { store = SyncStore; Sync.online = false; return; }
   try {
-    await ApiStore.call('ping', {}, undefined, 6000);
+    const pong = await ApiStore.call('ping', {}, undefined, 6000);
+    serverOutdated = !(pong.version >= API_VERSION_NEEDED);
   } catch (e) {
     if (e.auth) { store = SyncStore; return e; }
     // Offline oder Server-Problem: mit den Daten auf dem Gerät weiterarbeiten
@@ -829,6 +834,7 @@ async function showHome() {
     </div>` : '';
   const lastPlan = lsGet('tl_lastplan', '');
   app.innerHTML = `
+    ${serverOutdated ? '<div class="banner warn"><strong>api.php ist veraltet.</strong> Bitte die neue api.php auf den Server laden – sonst fehlen neue Funktionen (z. B. Fahrradfahren und Joggen) und Einträge werden nicht gespeichert.</div>' : ''}
     ${store.mode === 'local' ? '<div class="banner">Lokaler Modus: Daten werden nur in diesem Browser gespeichert. Mit api.php und MySQL werden sie zentral abgelegt.</div>' : ''}
     <div class="card pad">
       <label for="date">Neues Training</label>
