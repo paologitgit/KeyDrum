@@ -263,6 +263,17 @@ const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padSt
 // Minuten zwischen zwei Uhrzeiten "HH:MM" (über Mitternacht hinweg)
 const minutesBetween = (a, b) => { const [ah, am] = a.split(':').map(Number), [bh, bm] = b.split(':').map(Number); let m = bh * 60 + bm - (ah * 60 + am); return m < 0 ? m + 1440 : m; };
 const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h` : `${m} min`;
+// Trainingsdauer in Minuten (null = unbekannt):
+// reine Ausdauer-Trainings nach der erfassten Übungsdauer, sonst Start bis Ende;
+// fehlt bei gemischten Trainings die Endzeit, zählt die Ausdauerzeit.
+function workoutDuration(w, sets, end = w.end_time) {
+  const cardio = sets.filter(s => s.distance != null);
+  const cardioMin = Math.round(cardio.reduce((t, s) => t + (s.duration || 0), 0) / 60);
+  if (sets.length && cardio.length === sets.length && cardioMin) return { minutes: cardioMin, cardio: true };
+  if (w.start_time && end) return { minutes: minutesBetween(w.start_time, end), cardio: false };
+  if (cardioMin) return { minutes: cardioMin, cardio: true, fallback: true };
+  return null;
+}
 const OVERDUE_AFTER = 5;   // Übung gilt als „länger nicht gemacht“, wenn sie in den letzten 5 Trainings fehlt
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
 const bestOf = (mode, sets) => Math.max(...sets.map(s => s[metricKey(mode)] ?? -Infinity));
@@ -435,7 +446,8 @@ function makeLocalStore(key, offlineIds) {
       const db = this.load();
       return db.workouts.map(w => {
         const s = db.sets.filter(x => x.workout_id === w.id);
-        return { ...w, plan_name: db.plans.find(p => p.id === w.plan_id)?.name || null, set_count: s.length, exercise_count: new Set(s.map(x => x.exercise_id)).size };
+        return { ...w, plan_name: db.plans.find(p => p.id === w.plan_id)?.name || null, set_count: s.length, exercise_count: new Set(s.map(x => x.exercise_id)).size,
+          minutes: workoutDuration(w, s)?.minutes ?? null };
       }).sort((a, b) => this.byDate(b, a));
     },
     // Überblick: letzte Trainings (neueste zuerst) mit ihren Übungen + letztes Datum je Übung
@@ -496,7 +508,7 @@ function makeLocalStore(key, offlineIds) {
         const s = db.sets.filter(x => x.workout_id === w.id);
         return {
           id: w.id, date: w.date, rpe: w.rpe ?? null, body_weight: w.body_weight ?? null,
-          minutes: w.start_time && w.end_time ? minutesBetween(w.start_time, w.end_time) : null,
+          minutes: workoutDuration(w, s)?.minutes ?? null,
           volume: s.reduce((sum, x) => sum + (x.weight && x.reps ? x.weight * x.reps : 0), 0),
           distance: s.reduce((sum, x) => sum + (x.distance || 0), 0),
           set_count: s.length,
@@ -511,7 +523,7 @@ function makeLocalStore(key, offlineIds) {
       const num = v => v == null ? '' : fmtW(v);
       const rows = [['Datum', 'Start', 'Ende', 'Dauer (min)', 'Tagesform', 'Körpergewicht (kg)', 'Plan', 'Notiz', 'Übung', 'Art', 'Satz', 'Gewicht (kg)', 'Wdh.', 'Zeit (s)', 'Distanz (km)']];
       for (const w of db.workouts.slice().sort(this.byDate)) {
-        const head = [w.date, w.start_time || '', w.end_time || '', w.start_time && w.end_time ? minutesBetween(w.start_time, w.end_time) : '',
+        const head = [w.date, w.start_time || '', w.end_time || '', workoutDuration(w, db.sets.filter(s => s.workout_id === w.id))?.minutes ?? '',
           w.rpe ?? '', num(w.body_weight), planById[w.plan_id] || '', w.note || ''];
         const sets = db.sets.filter(s => s.workout_id === w.id)
           .sort((a, b) => db.exercises.indexOf(exById[a.exercise_id]) - db.exercises.indexOf(exById[b.exercise_id]) || a.set_no - b.set_no);
@@ -860,7 +872,7 @@ async function showHome() {
         <div class="list-item" data-id="${w.id}">
           <div class="grow">
             <div class="date">${fmtDate(w.date)}</div>
-            <div class="muted">${w.plan_name ? `${esc(w.plan_name)} · ` : ''}${w.exercise_count} Übungen · ${w.set_count} Sätze${w.start_time && w.end_time ? ` · ${fmtMin(minutesBetween(w.start_time, w.end_time))}` : ''}${w.rpe ? ` · Form ${w.rpe}/10` : ''}</div>
+            <div class="muted">${w.plan_name ? `${esc(w.plan_name)} · ` : ''}${w.exercise_count} ${w.exercise_count === 1 ? 'Übung' : 'Übungen'} · ${w.set_count} ${w.set_count === 1 ? 'Satz' : 'Sätze'}${w.minutes ? ` · ${fmtMin(w.minutes)}` : ''}${w.rpe ? ` · Form ${w.rpe}/10` : ''}</div>
             ${w.note ? `<div class="note">${esc(w.note)}</div>` : ''}
           </div>
           <span class="muted">›</span>
@@ -905,8 +917,12 @@ async function showWorkout(id) {
   const overdue = exercises.filter(isOverdue);
 
   // Dauer: läuft (Start ohne Ende) oder beendet
+  const dur = workoutDuration(w, w.sets);
+  const running = w.start_time && !w.end_time && w.date === today();
   const statusHtml = () => {
-    if (w.start_time && w.end_time) return `Dauer <strong>${fmtMin(minutesBetween(w.start_time, w.end_time))}</strong>`;
+    if (dur?.fallback && running) return `Läuft seit <strong>${fmtMin(minutesBetween(w.start_time, nowHM()))}</strong>`;
+    if (dur?.cardio) return `Dauer <strong>${fmtMin(dur.minutes)}</strong> <span class="muted">(aus der Ausdauerzeit)</span>`;
+    if (dur) return `Dauer <strong>${fmtMin(dur.minutes)}</strong>`;
     if (w.start_time && w.date === today()) return `Läuft seit <strong>${fmtMin(minutesBetween(w.start_time, nowHM()))}</strong>`;
     return '';
   };
@@ -1001,7 +1017,7 @@ async function showWorkout(id) {
       <div class="field"><label for="wNote">Notiz</label><textarea id="wNote" maxlength="255" placeholder="z. B. Schulter etwas müde">${esc(w.note)}</textarea></div>
     </div>
     ${w.end_time
-      ? `<div class="finished">Training beendet um ${w.end_time}${w.start_time ? `<strong>Dauer ${fmtMin(minutesBetween(w.start_time, w.end_time))}</strong>` : ''}</div>`
+      ? `<div class="finished">Training beendet um ${w.end_time}${dur ? `<strong>Dauer ${fmtMin(dur.minutes)}</strong>` : ''}</div>`
       : `<button class="primary finish" id="finishBtn">Training beendet</button>`}
     <button class="danger" id="delWorkout" style="width:100%;margin-top:16px">Training löschen</button>`;
 
@@ -1035,7 +1051,8 @@ async function showWorkout(id) {
     try {
       await store.updateWorkout(id, { end_time: end });
       Rest.stop();
-      toast(w.start_time ? `Training beendet · Dauer ${fmtMin(minutesBetween(w.start_time, end))}` : 'Training beendet');
+      const d = workoutDuration(w, w.sets, end);
+      toast(d ? `Training beendet · Dauer ${fmtMin(d.minutes)}` : 'Training beendet');
       history.replaceState(null, '', location.pathname); route();
     } catch (e) { showError(e); }
   };
