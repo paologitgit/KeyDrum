@@ -145,6 +145,8 @@
   .mng button { padding: 8px 10px; min-width: 44px; }
   .mng .mode-btn { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px; grid-column: 1; }
   .mng .up { grid-column: 3; }
+  .mng .back-btn { grid-column: 2; justify-self: start; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px; color: var(--muted); border-style: dashed; }
+  .mng .back-btn.on { background: var(--accent); color: var(--accent-text); border-style: solid; }
   .mng .hide-btn { display: inline-flex; align-items: center; justify-content: center; }
   /* Verlauf */
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
@@ -227,7 +229,7 @@
 <script>
 // ---------- Konfiguration ----------
 const API_URL = 'api.php';          // Pfad zur PHP-API
-const API_VERSION_NEEDED = 6;       // muss zu API_VERSION in api.php passen
+const API_VERSION_NEEDED = 7;       // muss zu API_VERSION in api.php passen
 const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
   'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse', 'Fahrradfahren:cardio', 'Joggen:cardio'];
 
@@ -257,6 +259,8 @@ const fmtSet = s => {
 };
 // Übungsart: 'weight' (kg × Wdh.), 'time' (Dauer) oder 'cardio' (Distanz + Dauer). Kennzahl für Bestwert und Diagramm.
 const MODES = { weight: 'Gewicht', time: '⏱ Zeit', cardio: 'Ausdauer' };
+// Vorbelegung „belastet den Rücken“ nach dem Namen (in „Übungen“ änderbar)
+const guessBack = name => /dead|kreuzheb|lat|rudern|row|pull|klimm|(^|\s)rücken|butterfly reverse|reverse fly|hyperext/i.test(name);
 const metricKey = mode => ({ time: 'duration', cardio: 'distance' })[mode] || 'weight';
 const fmtMetric = (mode, v) => mode === 'time' ? fmtDur(v) : mode === 'cardio' ? `${fmtW(v)} km` : `${fmtW(v)} kg`;
 const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -352,7 +356,7 @@ const ApiStore = {
     return data;
   },
   snapshot() { return this.call('snapshot', {}, undefined, 20000); },
-  addExercise(name, mode = 'weight') { return this.call('exercise_add', {}, { name, mode }); },
+  addExercise(name, mode = 'weight') { return this.call('exercise_add', {}, { name, mode, back: mode === 'weight' && guessBack(name) }); },
   updateExercise(id, fields) { return this.call('exercise_update', {}, { id, ...fields }); },
   reorderExercises(ids) { return this.call('exercise_reorder', {}, { ids }); },
   createWorkout(date, start_time = null, plan_id = null) { return this.call('workout_create', {}, { date, start_time, plan_id }); },
@@ -378,7 +382,7 @@ function makeLocalStore(key, offlineIds) {
       try { db = JSON.parse(localStorage.getItem(key)); } catch {}
       if (!db) db = offlineIds
         ? { seq: 0, exercises: [], workouts: [], sets: [], plans: [] }
-        : { seq: 1000, exercises: DEFAULT_EXERCISES.map((n, i) => { const [name, mode = 'weight'] = n.split(':'); return { id: i + 1, name, mode }; }), workouts: [], sets: [], plans: [] };
+        : { seq: 1000, exercises: DEFAULT_EXERCISES.map((n, i) => { const [name, mode = 'weight'] = n.split(':'); return { id: i + 1, name, mode, back: mode === 'weight' && guessBack(name) }; }), workouts: [], sets: [], plans: [] };
       if (!offlineIds && !db.seq) db.seq = 1000;
       db.plans ||= [];
       for (const e of db.exercises) { if (e.active === undefined) e.active = true; if (!e.mode) e.mode = 'weight'; }
@@ -398,7 +402,7 @@ function makeLocalStore(key, offlineIds) {
       const db = this.load();
       const ex = db.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
       if (ex) { ex.active = true; this.save(db); return ex; }
-      const e = { id: this.nextId(db), name, mode, active: true }; db.exercises.push(e); this.save(db); return e;
+      const e = { id: this.nextId(db), name, mode, back: mode === 'weight' && guessBack(name), active: true }; db.exercises.push(e); this.save(db); return e;
     },
     async updateExercise(id, fields) {
       const db = this.load(), ex = db.exercises.find(e => e.id === id);
@@ -409,6 +413,7 @@ function makeLocalStore(key, offlineIds) {
       }
       if ('active' in fields) ex.active = !!fields.active;
       if ('mode' in fields) ex.mode = MODES[fields.mode] ? fields.mode : 'weight';
+      if ('back' in fields) ex.back = !!fields.back;
       this.save(db);
     },
     async reorderExercises(ids) {
@@ -705,19 +710,21 @@ $('#restPlus').onclick = () => Rest.add(15);
 $('#restStop').onclick = () => Rest.stop();
 
 // ---------- Fortschrittsvorschlag ----------
-// Beim letzten Mal alle Sätze gleich (Gewicht und Wdh. bzw. Zeit) → etwas mehr vorschlagen
-function suggestion(mode, prevSets) {
-  if (!prevSets || prevSets.length < 2) return null;
-  const n = prevSets.length, same = arr => arr.every(v => v != null && v === arr[0]);
-  if (mode === 'time') {
-    const d = prevSets.map(s => s.duration);
-    if (!same(d)) return null;
-    return { duration: d[0] + 5, label: fmtDur(d[0] + 5), plus: '+5 s', why: `letztes Mal alle ${n} Sätze mit ${fmtDur(d[0])} geschafft` };
-  }
-  const w = prevSets.map(s => s.weight), r = prevSets.map(s => s.reps);
-  if (!same(w) || !same(r) || !r[0]) return null;
-  const next = Math.round((w[0] + settings.step) * 100) / 100;
-  return { weight: next, reps: r[0], label: `${fmtW(next)} kg × ${r[0]}`, plus: `+${fmtW(settings.step)} kg`, why: `letztes Mal alle ${n} Sätze mit ${fmtW(w[0])} kg × ${r[0]} geschafft` };
+// Nur bei Gewichts-Übungen und nur, wenn beim letzten Mal ein Satz mehr als 14 Wdh. hatte.
+// Vorschlag: Gewicht dieses Satzes plus Steigerung – bei Rücken-Übungen nur die Hälfte.
+const SUGGEST_MIN_REPS = 15;
+function suggestion(mode, prevSets, back) {
+  if (mode !== 'weight' || !prevSets?.length) return null;
+  const high = prevSets.filter(s => s.weight != null && s.reps >= SUGGEST_MIN_REPS);
+  if (!high.length) return null;
+  const top = high.reduce((a, b) => b.weight > a.weight || (b.weight === a.weight && b.reps > a.reps) ? b : a);
+  const step = back ? settings.step / 2 : settings.step;
+  const next = Math.round((top.weight + step) * 100) / 100;
+  return {
+    weight: next, reps: null, label: `${fmtW(next)} kg`,
+    plus: `+${fmtW(step)} kg${back ? ' · Rücken: moderat' : ''}`,
+    why: `letztes Mal ${fmtW(top.weight)} kg × ${top.reps} – mehr als 14 Wiederholungen`,
+  };
 }
 
 // ---------- Navigation ----------
@@ -946,7 +953,7 @@ async function showWorkout(id) {
       <div class="chips">${overdue.map(ex => `<button class="chip" data-jump="${ex.id}">${esc(ex.name)}</button>`).join('')}</div>
     </div>` : ''}` + exercises.map(ex => {
     const cur = setsBy[ex.id] || [], prev = w.previous[ex.id];
-    const sug = !cur.length ? suggestion(modeOf[ex.id], prev?.sets) : null;
+    const sug = !cur.length ? suggestion(modeOf[ex.id], prev?.sets, ex.back) : null;
     // Vorbelegung: letzter Satz heute, sonst Vorschlag, sonst letzter Satz vom letzten Mal
     const fill = cur.length ? cur[cur.length - 1] : (sug ? { weight: sug.weight, reps: sug.reps, duration: sug.duration } : prev?.sets[prev.sets.length - 1]);
     const cardio = modeOf[ex.id] === 'cardio';
@@ -1132,12 +1139,13 @@ async function showExercises() {
   try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
-    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
     <div class="card">
       ${active.map((e, i) => `
         <div class="mng" data-id="${e.id}">
           <input class="nm" value="${esc(e.name)}" maxlength="100" aria-label="Name">
           <button class="mode-btn" aria-label="Erfassung: ${MODES[e.mode] || MODES.weight} – antippen zum Wechseln">${MODES[e.mode] || MODES.weight}</button>
+          ${(e.mode || 'weight') === 'weight' ? `<button class="back-btn ${e.back ? 'on' : ''}" aria-pressed="${!!e.back}" aria-label="Belastet den Rücken: ${e.back ? 'ja' : 'nein'} – antippen zum Wechseln">Rücken</button>` : ''}
           <button class="up" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
           <button class="down" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
           <button class="hide-btn" aria-label="Ausblenden" title="Ausblenden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
@@ -1173,6 +1181,11 @@ async function showExercises() {
     $('.mode-btn', row).onclick = async () => {
       const order = Object.keys(MODES), mode = order[(order.indexOf(active[idx].mode || 'weight') + 1) % order.length];
       try { await store.updateExercise(exId, { mode }); toast({ weight: 'Wird mit Gewicht erfasst', time: 'Wird mit Zeit erfasst', cardio: 'Wird mit Distanz und Dauer erfasst' }[mode]); showExercises(); } catch (e) { showError(e); }
+    };
+    const backBtn = $('.back-btn', row);
+    if (backBtn) backBtn.onclick = async () => {
+      const back = !active[idx].back;
+      try { await store.updateExercise(exId, { back }); toast(back ? 'Rücken: Steigerung wird halbiert' : 'Rücken-Markierung entfernt'); showExercises(); } catch (e) { showError(e); }
     };
     $('.up', row).onclick = () => move(idx, -1);
     $('.down', row).onclick = () => move(idx, 1);
@@ -1328,7 +1341,7 @@ async function showSettings() {
     <div class="card pad">
       <label>Steigerung beim Vorschlag</label>
       ${seg('step', [[1, '1 kg'], [1.25, '1,25 kg'], [2.5, '2,5 kg'], [5, '5 kg']], settings.step)}
-      <p class="muted hint">Haben Sie beim letzten Mal alle Sätze mit gleichem Gewicht und gleichen Wiederholungen geschafft, schlägt die App so viel mehr vor. Bei Zeit-Übungen: +5 Sekunden.</p>
+      <p class="muted hint">Hatte beim letzten Mal ein Satz mehr als 14 Wiederholungen, schlägt die App so viel mehr Gewicht vor. Bei Übungen, die unter „Übungen“ als „Rücken“ markiert sind, nur die Hälfte.</p>
     </div>
     <div class="card pad">
       <label>Daten</label>

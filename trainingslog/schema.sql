@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS exercises (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name        VARCHAR(100) NOT NULL,
   mode        VARCHAR(10) NOT NULL DEFAULT 'weight',   -- 'weight' = kg × Wdh., 'time' = Dauer, 'cardio' = Distanz + Dauer
+  back        TINYINT(1) NOT NULL DEFAULT 0,          -- 1 = belastet den Rücken: moderatere Steigerung
   sort_order  INT NOT NULL DEFAULT 0,
   active      TINYINT(1) NOT NULL DEFAULT 1,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -69,3 +70,5 @@ INSERT IGNORE INTO exercises (name, sort_order) VALUES
 INSERT IGNORE INTO exercises (name, mode, sort_order) VALUES
   ('Fahrradfahren', 'cardio', 100),
   ('Joggen', 'cardio', 110);
+
+UPDATE exercises SET back = 1 WHERE name IN ('Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Rücken', 'Butterfly reverse');

@@ -21,7 +21,7 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 
 - **Ausdauer:** Übungsart „Ausdauer“ mit Distanz (km) und Dauer, z. B. Fahrradfahren und Joggen (beide sind voreingestellt). Die App zeigt das Tempo als Pace (min/km, unter 15 km/h) oder als Geschwindigkeit (km/h). Bestwert = längste Strecke; im Verlauf Diagramme für Distanz und Tempo, in der Statistik die Kilometer pro Woche.
 - **Pausentimer:** Nach jedem Satz läuft unten eine Pause (Standard 90 s, einstellbar). Am Ende vibriert das Smartphone (Android) und es ertönt ein Ton.
-- **Fortschrittsvorschlag:** Wurden beim letzten Mal alle Sätze mit gleichem Gewicht und gleichen Wiederholungen geschafft, schlägt die App mehr vor (Standard +2,5 kg, bei Zeit-Übungen +5 s) und trägt den Wert gleich ein.
+- **Fortschrittsvorschlag:** Hatte beim letzten Mal ein Satz mehr als 14 Wiederholungen, schlägt die App das Gewicht dieses Satzes plus die eingestellte Steigerung vor (Standard +2,5 kg) und trägt es gleich ein. Übungen, die unter „Übungen“ als **Rücken** markiert sind, erhalten nur die halbe Steigerung. Vormarkiert (nach Namen): Deadlift, Latzug, Sitting Row, Pull-up, Rücken, Butterfly reverse.
 - **Trainingspläne:** Unter „Pläne“ Übungsauswahlen anlegen (z. B. „Tag A“). Beim Start wählen; im Training lassen sich alle Übungen einblenden.
 - **Statistik:** Trainings, Trainingszeit und Volumen pro Woche (12 Wochen), Tagesform pro Training und nach Wochentag, Körpergewicht.
 - **Tagesform und Körpergewicht:** unter „Nach dem Training“.
@@ -43,7 +43,7 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 ## Datenmodell
 
 ```
-exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', sort_order, active)
+exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', back, sort_order, active)
 workouts  (id, workout_date, start_time NULL, end_time NULL, note, rpe NULL, body_weight NULL, plan_id NULL)
 plans     (id, name)
 plan_exercises (plan_id → plans, exercise_id → exercises)
@@ -85,7 +85,7 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `ping` | GET | – |
 | `exercises` | GET | `&all=1` gibt auch ausgeblendete Übungen zurück |
 | `exercise_add` | POST | `{name, mode?: "weight"\|"time"}` |
-| `exercise_update` | POST | `{id, name?, active?, mode?}` |
+| `exercise_update` | POST | `{id, name?, active?, mode?, back?}` |
 | `exercise_reorder` | POST | `{ids: [..]}` in gewünschter Reihenfolge |
 | `history&exercise_id=` | GET | alle Trainings mit Sätzen dieser Übung |
 | `workouts` | GET | – |
