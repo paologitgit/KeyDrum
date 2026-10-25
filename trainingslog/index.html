@@ -216,6 +216,15 @@
   .vt td, .vt th { font-size: 14px; }
   .vt thead th:first-child { text-align: left; padding-left: 12px; }
   .vt td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .w4 th, .w4 td { padding: 7px 2px; font-size: 14px; }
+  .w4 thead th { font-size: 12px; line-height: 1.2; }
+  .w4 thead .sub { display: block; font-weight: 400; font-size: 11px; color: var(--muted); }
+  .w4 tbody th { max-width: 112px; font-size: 14px; }
+  .w4 td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .w4 .dl { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .w4 .now { background: var(--prev); }
+  .w4 th:last-child, .w4 td:last-child { padding-right: 8px; padding-left: 6px; }
+  .w4 tr.sep th { text-align: left; padding: 14px 12px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
   .cal-wrap { display: flex; }
   .cal-wrap svg { display: block; flex: none; }
   .cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
@@ -1510,6 +1519,7 @@ async function showVolume() {
     </div>
     <div class="stats stats3">${tiles}</div>
     <p class="muted cmp-note">Vergleich jeweils mit dem gleich langen Zeitraum davor bzw. mit dem Vorjahr bis zum selben Tag.</p>
+    ${fourWeeksHtml(ws, data.exercises)}
     <div class="card chart-card">
       <h3>${M.label} pro ${{ week: 'Woche', month: 'Monat', quarter: 'Quartal' }[unit]}</h3>
       <div class="legend"><span class="lg-bar"></span>${M.label} <span class="lg-line"></span>${winLabel}</div>
@@ -1545,6 +1555,57 @@ async function showVolume() {
   })), { axisFmt: M.axis, steps: M.steps, labelEvery });
 
   drawCalendar($('#calWrap'), $('#calInfo'), ws, val, M.fmt);
+}
+
+// Letzte 4 Wochen nebeneinander: 4 abgeschlossene Wochen + laufende Woche,
+// Kennzahlen mit Veränderung zur Vorwoche, darunter die Übungen pro Woche
+function fourWeeksHtml(ws, exercises) {
+  const cur = mondayOf(today());
+  const starts = [5, 4, 3, 2, 1, 0].map(k => addDays(cur, -7 * k));   // eine Woche Vorlauf für die erste Veränderung
+  const wk = Object.fromEntries(starts.map(st => [st, { count: 0, sets: 0, volume: 0, minutes: 0, km: 0, ex: {} }]));
+  for (const w of ws) {
+    const b = wk[mondayOf(w.date)];
+    if (!b) continue;
+    for (const k of ['count', 'sets', 'volume', 'minutes', 'km']) b[k] += w[k];
+    for (const s of w.per) b.ex[s.e] = (b.ex[s.e] || 0) + (s.cardio ? s.km : 1);
+  }
+  const cols = starts.slice(1);   // 4 abgeschlossene Wochen + laufende
+  const hm = m => `${Math.floor(m / 60)}:${String(Math.round(m % 60)).padStart(2, '0')}`;
+  const ROWS = [
+    ['count', 'Trainings', v => fmtInt(v)],
+    ['sets', 'Sätze', v => fmtInt(v)],
+    ['volume', 'Volumen (kg)', v => v >= 10000 ? `${fmtDec(v / 1000)}k` : fmtInt(v)],
+    ['minutes', 'Zeit (h)', v => hm(v)],
+    ['km', 'Ausdauer (km)', v => fmtDec(v)],
+  ];
+  const delta = (v, p) => {
+    if (!p) return v ? '<span class="dl">neu</span>' : '';
+    const pct = Math.round((v - p) / p * 100);
+    return `<span class="dl">${pct > 0 ? `↑ ${pct} %` : pct < 0 ? `↓ ${-pct} %` : '='}</span>`;
+  };
+  const head = cols.map((st, i) => i === cols.length - 1
+    ? `<th class="now">jetzt<span class="sub">läuft</span></th>`
+    : `<th>KW ${isoWeek(st)}<span class="sub">${fmtShort(st)}</span></th>`).join('');
+  const metricRows = ROWS.map(([k, label, f]) => `<tr><th>${label}</th>${cols.map((st, i) => {
+    const v = wk[st][k], prev = wk[starts[i]][k], now = i === cols.length - 1;
+    return `<td class="${now ? 'now' : ''}">${v ? f(v) : '<span class="muted">·</span>'}${now ? '' : delta(v, prev)}</td>`;
+  }).join('')}</tr>`).join('');
+  const exIds = exercises.filter(e => cols.some(st => wk[st].ex[e.id]));
+  const exRows = exIds.map(e => `<tr><th>${esc(e.name)}${e.mode === 'cardio' ? ' <span class="muted">km</span>' : ''}</th>${cols.map((st, i) => {
+    const v = wk[st].ex[e.id] || 0;
+    return `<td class="${i === cols.length - 1 ? 'now' : ''}">${v ? (e.mode === 'cardio' ? fmtDec(v) : fmtInt(v)) : '<span class="muted">·</span>'}</td>`;
+  }).join('')}</tr>`).join('');
+  return `
+    <h2>Letzte 4 Wochen</h2>
+    <div class="card">
+      <table class="ov w4">
+        <thead><tr><th></th>${head}</tr></thead>
+        <tbody>${metricRows}
+          ${exRows ? `<tr class="sep"><th colspan="${cols.length + 1}">Übungen · Sätze bzw. km</th></tr>${exRows}` : ''}
+        </tbody>
+      </table>
+      <p class="muted ov-legend">Pfeile: Veränderung gegenüber der Vorwoche. „jetzt“ = laufende Woche bis heute. · = nicht trainiert.</p>
+    </div>`;
 }
 
 // Jahreskalender: 53 Wochen × 7 Tage, Farbtiefe nach Umfang des Tages
