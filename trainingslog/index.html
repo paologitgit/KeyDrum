@@ -169,6 +169,7 @@
   select { width: 100%; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 3px; background: var(--card); min-height: 44px; font: inherit; color: inherit; }
   /* Navigation auf der Startseite */
   .nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .nav .wide { grid-column: 1 / -1; }
   .nav button { background: var(--card); font: 16px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; padding: 16px 10px; box-shadow: 3px 3px 0 var(--line); }
   /* Abgleich-Hinweis */
   #syncBar { position: sticky; top: calc(env(safe-area-inset-top) + 62px); z-index: 4; background: var(--accent); color: var(--accent-text);
@@ -205,8 +206,36 @@
   .wd-bar { height: 12px; border: 1px solid var(--soft-line); }
   .wd-bar span { display: block; height: 100%; background: var(--accent); }
   .wd-v { text-align: right; font-variant-numeric: tabular-nums; }
+  /* Umfang */
+  .cmp .v { font-size: 22px !important; }
+  .cmp .d { font-size: 13px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .cmp-note { margin: -4px 4px 14px; font-size: 12px; }
+  .legend { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 12px 6px; color: var(--muted); }
+  .lg-bar { display: inline-block; width: 12px; height: 12px; background: var(--accent); }
+  .lg-line { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--pr-text); margin-left: 10px; }
+  .vt td, .vt th { font-size: 14px; }
+  .vt thead th:first-child { text-align: left; padding-left: 12px; }
+  .vt td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cal-wrap { display: flex; }
+  .cal-wrap svg { display: block; flex: none; }
+  .cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .cal-wrap .axis { fill: var(--muted); font: 10px var(--body); }
+  .cal { cursor: pointer; }
+  .cal.sel { stroke: var(--pr-text); stroke-width: 2; }
+  .c0 { fill: transparent; stroke: var(--soft-line); stroke-width: 1; }
+  .c1 { fill: var(--accent); fill-opacity: .25; }
+  .c2 { fill: var(--accent); fill-opacity: .5; }
+  .c3 { fill: var(--accent); fill-opacity: .75; }
+  .c4 { fill: var(--accent); }
+  .cal-legend { display: flex; align-items: center; gap: 3px; font-size: 12px; margin-top: 8px; }
+  .cal-legend span { display: inline-block; width: 12px; height: 12px; }
+  .cal-legend span.c0 { border: 1px solid var(--soft-line); }
+  .cal-legend span.c1 { background: var(--accent); opacity: .25; } .cal-legend span.c2 { background: var(--accent); opacity: .5; }
+  .cal-legend span.c3 { background: var(--accent); opacity: .75; } .cal-legend span.c4 { background: var(--accent); }
+  .cal-info { margin: 8px 0 0; font-size: 14px; min-height: 20px; }
   /* Einstellungen */
-  .seg.wrap { flex-wrap: wrap; }
+  .seg.wrap { flex-wrap: wrap; border: 0; gap: 6px; overflow: visible; }
+  .seg.wrap span { border: 1.5px solid var(--line) !important; border-radius: 3px; }
   .hint { margin: 10px 0 0; font-size: 13px; }
   .sync-info { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
 </style>
@@ -520,6 +549,25 @@ function makeLocalStore(key, offlineIds) {
         };
       });
     },
+    // Umfang: Kennzahlen pro Training und Übungen pro Training
+    async analysis() {
+      const db = this.load();
+      const modeOf = Object.fromEntries(db.exercises.map(e => [e.id, e.mode || 'weight']));
+      return {
+        exercises: db.exercises.map(e => ({ id: e.id, name: e.name, mode: e.mode || 'weight' })),
+        workouts: db.workouts.map(w => {
+          const s = db.sets.filter(x => x.workout_id === w.id);
+          return {
+            date: w.date, count: 1,
+            minutes: workoutDuration(w, s)?.minutes || 0,
+            sets: s.filter(x => modeOf[x.exercise_id] !== 'cardio').length,
+            volume: s.reduce((sum, x) => sum + (x.weight && x.reps ? x.weight * x.reps : 0), 0),
+            km: s.reduce((sum, x) => sum + (x.distance || 0), 0),
+            per: s.map(x => ({ e: x.exercise_id, cardio: modeOf[x.exercise_id] === 'cardio', km: x.distance || 0 })),
+          };
+        }),
+      };
+    },
     // Export: eine Zeile pro Satz
     async exportRows() {
       const db = this.load();
@@ -611,7 +659,7 @@ const Sync = {
 
 // Mit Server: lesen und schreiben im Zwischenspeicher, Änderungen zusätzlich in die Warteschlange
 const SyncStore = { mode: 'sync' };
-for (const fn of ['exercises', 'history', 'workouts', 'overview', 'workout', 'plans', 'stats', 'exportRows']) {
+for (const fn of ['exercises', 'history', 'workouts', 'overview', 'workout', 'plans', 'stats', 'analysis', 'exportRows']) {
   SyncStore[fn] = (...a) => Cache[fn](...Sync.translate(a, Sync.applied, false));
 }
 for (const fn of ['addExercise', 'updateExercise', 'reorderExercises', 'createWorkout', 'updateWorkout', 'deleteWorkout', 'addSet', 'deleteSet', 'createPlan', 'updatePlan', 'deletePlan']) {
@@ -745,6 +793,7 @@ function route() {
   if (h === '#ex') return showExercises();
   if (h === '#plans') return showPlans();
   if (h === '#stats') return showStats();
+  if (h === '#volume') return showVolume();
   if (h === '#settings') return showSettings();
   return showHome();
 }
@@ -867,6 +916,7 @@ async function showHome() {
       </div>` : ''}
     </div>
     <nav class="nav">
+      <button data-go="#volume" class="wide">Umfang & Entwicklung</button>
       <button data-go="#ex">Übungen</button>
       <button data-go="#plans">Pläne</button>
       <button data-go="#stats">Statistik</button>
@@ -1322,6 +1372,220 @@ async function showStats() {
     { fmt: v => `${fmtW(v)} kg`, axisFmt: fmtW, steps: [0.5, 1, 2, 5, 10], label: 'Körpergewicht' });
 }
 
+// ---------- Ansicht: Umfang & Entwicklung ----------
+const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const MONTHS_LONG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return isoDate(new Date(y, m - 1, d + n)); };
+const fmtDec = v => fmtW(Math.round(v * 10) / 10);
+const VOL_METRICS = {
+  sets: { label: 'Sätze', fmt: v => `${fmtInt(v)} Sätze`, avg: v => `${fmtDec(v)} Sätze`, axis: v => fmtInt(v),
+    steps: [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000],
+    hint: 'Anzahl Sätze aller Kraft- und Zeit-Übungen – das verlässlichste Maß für den Trainingsumfang.' },
+  volume: { label: 'Volumen', fmt: v => `${fmtInt(v)} kg`, avg: v => `${fmtInt(v)} kg`, axis: v => v >= 1000 ? `${fmtDec(v / 1000)}k` : fmtInt(v),
+    steps: [100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000],
+    hint: 'Gewicht × Wiederholungen. Steigt auch, wenn Sie bei gleich vielen Sätzen schwerer trainieren.' },
+  minutes: { label: 'Zeit', fmt: v => !v ? '0 min' : v >= 6000 ? `${fmtInt(v / 60)} h` : fmtMin(Math.round(v)), avg: v => fmtMin(Math.round(v)), axis: m => `${fmtDec(m / 60)} h`,
+    steps: [30, 60, 120, 180, 300, 600, 1200, 1800, 3000, 6000, 12000],
+    hint: 'Trainingsdauer: Krafttraining von Start bis Ende, Ausdauer nach der erfassten Zeit.' },
+  km: { label: 'Ausdauer', fmt: v => `${fmtDec(v)} km`, avg: v => `${fmtDec(v)} km`, axis: v => fmtW(v),
+    steps: [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 2000],
+    hint: 'Distanz aller Ausdauer-Einheiten (z. B. Fahrradfahren, Joggen).' },
+  count: { label: 'Trainings', fmt: v => `${fmtInt(v)} ${v === 1 ? 'Training' : 'Trainings'}`, avg: v => `${fmtDec(v)} Trainings`, axis: v => fmtInt(v),
+    steps: [1, 2, 5, 10, 20, 50, 100, 200],
+    hint: 'Anzahl Trainings – zeigt die Regelmäßigkeit.' },
+};
+const VOL_RANGES = { '3m': '3 Monate', '12m': '12 Monate', all: 'Gesamt' };
+
+// Zeitabschnitte (älteste zuerst), der letzte ist der laufende
+function bucketKey(unit, iso) {
+  if (unit === 'week') return mondayOf(iso);
+  const [y, m] = iso.split('-').map(Number);
+  return unit === 'month' ? `${y}-${String(m).padStart(2, '0')}` : `${y}-Q${Math.ceil(m / 3)}`;
+}
+function bucketList(unit, n) {
+  const t = today(), [ty, tm] = t.split('-').map(Number), out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    if (unit === 'week') {
+      const key = addDays(mondayOf(t), -7 * i);
+      out.push({ key, label: `KW ${isoWeek(key)}`, title: `KW ${isoWeek(key)} · ab ${fmtShort(key)}` });
+    } else if (unit === 'month') {
+      const dt = new Date(ty, tm - 1 - i, 1), y = dt.getFullYear(), m = dt.getMonth();
+      out.push({ key: `${y}-${String(m + 1).padStart(2, '0')}`, label: m === 0 ? `${MONTHS[m]} ${String(y).slice(2)}` : MONTHS[m], title: `${MONTHS_LONG[m]} ${y}` });
+    } else {
+      const idx = ty * 4 + Math.ceil(tm / 3) - 1 - i, y = Math.floor(idx / 4), q = idx % 4 + 1;
+      out.push({ key: `${y}-Q${q}`, label: `Q${q} ${String(y).slice(2)}`, title: `${q}. Quartal ${y}` });
+    }
+  }
+  if (out.length) out[out.length - 1].partial = true;
+  return out;
+}
+
+async function showVolume() {
+  setHeader('Umfang', true);
+  let data;
+  try { data = await store.analysis(); } catch (e) { return showPageError(e); }
+  const ws = data.workouts.slice().sort((a, b) => a.date.localeCompare(b.date));
+  if (!ws.length) { app.innerHTML = '<div class="card empty">Noch keine Trainings erfasst.</div>'; return; }
+
+  const pref = { range: '3m', metric: 'sets', ...lsGet('tl_volume', {}) };
+  if (!VOL_RANGES[pref.range]) pref.range = '3m';
+  if (!VOL_METRICS[pref.metric]) pref.metric = 'sets';
+  const M = VOL_METRICS[pref.metric], val = w => w[pref.metric];
+  const t = today(), first = ws[0].date;
+
+  // Zeitraum → Einteilung
+  let unit, n, win, winLabel, labelEvery;
+  if (pref.range === '3m') { unit = 'week'; n = 13; win = 4; winLabel = 'Ø 4 Wochen'; labelEvery = 3; }
+  else if (pref.range === '12m') { unit = 'month'; n = 12; win = 3; winLabel = 'Ø 3 Monate'; labelEvery = 2; }
+  else {
+    const [fy, fm] = first.split('-').map(Number), [ty, tm] = t.split('-').map(Number);
+    const months = (ty * 12 + tm) - (fy * 12 + fm) + 1;
+    if (months <= 36) { unit = 'month'; n = Math.max(months, 6); win = 3; winLabel = 'Ø 3 Monate'; }
+    else { unit = 'quarter'; n = Math.ceil(months / 3) + 1; win = 2; winLabel = 'Ø 2 Quartale'; }
+    labelEvery = Math.max(1, Math.ceil(n / 6));
+  }
+  // Etwas Vorlauf berechnen, damit der Durchschnitt am Anfang schon stimmt
+  const all = bucketList(unit, n + win - 1);
+  const sum = {};
+  for (const w of ws) { const k = bucketKey(unit, w.date); sum[k] = (sum[k] || 0) + val(w); }
+  const firstKey = bucketKey(unit, first);
+  all.forEach((b, i) => {
+    b.value = sum[b.key] || 0;
+    const startIdx = i - win + 1;
+    b.avg = (!b.partial && startIdx >= 0 && all[startIdx].key >= firstKey)
+      ? all.slice(startIdx, i + 1).reduce((s, x) => s + (sum[x.key] || 0), 0) / win : null;
+  });
+  const shown = all.slice(win - 1);
+
+  // Vergleich mit dem Zeitraum davor
+  const total = (from, to) => ws.filter(w => w.date >= from && w.date <= to).reduce((s, w) => s + val(w), 0);
+  const compare = (from, to, pFrom, pTo, label) => {
+    const cur = total(from, to), prev = total(pFrom, pTo);
+    let delta;
+    if (first > pFrom) delta = '<span class="muted">noch zu wenige Daten</span>';
+    else if (!prev) delta = cur ? 'neu' : '–';
+    else {
+      const pct = Math.round((cur - prev) / prev * 100);
+      delta = pct > 0 ? `↑ +${pct} %` : pct < 0 ? `↓ −${-pct} %` : '= gleich';
+    }
+    return `<div class="card stat cmp"><div class="v">${M.fmt(cur).replace(/ (Sätze|Trainings?)$/, '')}</div><div class="l">${label}</div><div class="d">${delta}</div></div>`;
+  };
+  const y = Number(t.slice(0, 4));
+  const tiles = [
+    compare(addDays(t, -27), t, addDays(t, -55), addDays(t, -28), 'Letzte 4 Wochen'),
+    compare(addDays(t, -90), t, addDays(t, -181), addDays(t, -91), 'Letzte 3 Monate'),
+    compare(`${y}-01-01`, t, `${y - 1}-01-01`, `${y - 1}${t.slice(4)}`, `${y} bis heute`),
+  ].join('');
+
+  // Pro Übung: letzte 3 Monate gegenüber den 3 Monaten davor (Kraft: Sätze, Ausdauer: km)
+  const from = addDays(t, -90), pFrom = addDays(t, -181), pTo = addDays(t, -91);
+  const per = {};
+  for (const w of ws) {
+    const slot = w.date >= from ? 'cur' : w.date >= pFrom && w.date <= pTo ? 'prev' : null;
+    if (!slot) continue;
+    for (const s of w.per) { const r = per[s.e] ||= { cur: 0, prev: 0 }; r[slot] += s.cardio ? s.km : 1; }
+  }
+  const exById = Object.fromEntries(data.exercises.map(e => [e.id, e]));
+  const rows = Object.entries(per).map(([id, r]) => ({ ex: exById[id], ...r })).filter(r => r.ex)
+    .sort((a, b) => (a.ex.mode === 'cardio') - (b.ex.mode === 'cardio') || b.cur - a.cur || b.prev - a.prev);
+  const trend = r => {
+    if (!r.prev) return r.cur ? 'neu' : '–';
+    if (!r.cur) return '<span class="overdue-tag">↓ ausgelassen</span>';
+    const pct = Math.round((r.cur - r.prev) / r.prev * 100);
+    return pct > 0 ? `↑ +${pct} %` : pct < 0 ? `↓ −${-pct} %` : '=';
+  };
+  const cell = (r, v) => r.ex.mode === 'cardio' ? `${fmtDec(v)} km` : fmtInt(v);
+  const hasPrevPeriod = first <= pFrom;
+
+  const seg = (name, opts, cur) => `<div class="seg wrap" role="radiogroup">${Object.entries(opts).map(([v, l]) =>
+    `<label><input type="radio" name="${name}" value="${v}" ${v === cur ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
+
+  app.innerHTML = `
+    <div class="card pad">
+      <label>Zeitraum</label>
+      ${seg('vRange', VOL_RANGES, pref.range)}
+      <label style="margin-top:14px">Kennzahl</label>
+      ${seg('vMetric', Object.fromEntries(Object.entries(VOL_METRICS).map(([k, m]) => [k, m.label])), pref.metric)}
+      <p class="muted hint">${M.hint}</p>
+    </div>
+    <div class="stats stats3">${tiles}</div>
+    <p class="muted cmp-note">Vergleich jeweils mit dem gleich langen Zeitraum davor bzw. mit dem Vorjahr bis zum selben Tag.</p>
+    <div class="card chart-card">
+      <h3>${M.label} pro ${{ week: 'Woche', month: 'Monat', quarter: 'Quartal' }[unit]}</h3>
+      <div class="legend"><span class="lg-bar"></span>${M.label} <span class="lg-line"></span>${winLabel}</div>
+      <div id="vChart"></div><div class="tip"></div>
+      <p class="muted chart-note">Der laufende Abschnitt ist abgeschwächt dargestellt und zählt beim Durchschnitt noch nicht mit.</p>
+    </div>
+    <h2>Pro Übung · 3 Monate</h2>
+    <div class="card">
+      ${rows.length ? `
+      <table class="ov vt">
+        <thead><tr><th>Übung</th><th>davor</th><th>jetzt</th><th>Trend</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><th>${esc(r.ex.name)}</th><td>${hasPrevPeriod ? cell(r, r.prev) : '–'}</td><td><strong>${cell(r, r.cur)}</strong></td><td>${hasPrevPeriod ? trend(r) : '–'}</td></tr>`).join('')}</tbody>
+      </table>
+      <p class="muted ov-legend">Kraft- und Zeit-Übungen: Anzahl Sätze · Ausdauer: km. „davor“ = die 3 Monate vor den letzten 3 Monaten.${hasPrevPeriod ? '' : ' Für den Vergleich fehlen noch Daten.'}</p>`
+      : '<div class="empty">In den letzten 6 Monaten wurden keine Übungen erfasst.</div>'}
+    </div>
+    <h2>Jahreskalender</h2>
+    <div class="card pad">
+      <div class="cal-wrap" id="calWrap"></div>
+      <div class="cal-legend muted">weniger <span class="c0"></span><span class="c1"></span><span class="c2"></span><span class="c3"></span><span class="c4"></span> mehr · ${M.label}</div>
+      <p class="cal-info" id="calInfo">Ein Feld antippen, um den Tag zu sehen.</p>
+    </div>`;
+
+  app.querySelectorAll('input[name="vRange"], input[name="vMetric"]').forEach(r => r.onchange = () => {
+    const key = r.name === 'vRange' ? 'range' : 'metric';
+    lsSet('tl_volume', { ...pref, [key]: r.value });
+    showVolume();
+  });
+
+  drawBars($('#vChart'), $('#vChart').parentElement.querySelector('.tip'), shown.map(b => ({
+    label: b.label, value: b.value, avg: b.avg, partial: b.partial,
+    tip: `${b.title}${b.partial ? ' (läuft noch)' : ''}<br><strong>${M.fmt(b.value)}</strong>${b.avg != null ? `<br>${winLabel}: ${M.avg(b.avg)}` : ''}`,
+  })), { axisFmt: M.axis, steps: M.steps, labelEvery });
+
+  drawCalendar($('#calWrap'), $('#calInfo'), ws, val, M.fmt);
+}
+
+// Jahreskalender: 53 Wochen × 7 Tage, Farbtiefe nach Umfang des Tages
+function drawCalendar(host, info, ws, val, fmt) {
+  const t = today(), day = {};
+  for (const w of ws) day[w.date] = (day[w.date] || 0) + val(w);
+  const start = addDays(mondayOf(t), -52 * 7);
+  // Stufen nach Quartilen der Trainingstage im Zeitraum
+  const vals = Object.entries(day).filter(([d, v]) => d >= start && v > 0).map(([, v]) => v).sort((a, b) => a - b);
+  const q = p => vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : 0;
+  const cuts = [q(0.25), q(0.5), q(0.75)];
+  const level = v => !v ? 0 : v <= cuts[0] ? 1 : v <= cuts[1] ? 2 : v <= cuts[2] ? 3 : 4;
+  const C = 12, G = 3, L = 22, T = 16;   // Feldgröße, Abstand, Platz für Wochentage und Monate
+  let cells = '', months = '', lastMonth = -1;
+  for (let wk = 0; wk < 53; wk++) {
+    for (let d = 0; d < 7; d++) {
+      const iso = addDays(start, wk * 7 + d);
+      if (iso > t) continue;
+      const v = day[iso] || 0, lv = level(v);
+      cells += `<rect class="cal c${lv}" data-d="${iso}" x="${L + wk * (C + G)}" y="${T + d * (C + G)}" width="${C}" height="${C}"/>`;
+      if (d === 0) {
+        const m = Number(iso.slice(5, 7)) - 1;
+        if (m !== lastMonth) { if (wk < 52) months += `<text class="axis" x="${L + wk * (C + G)}" y="10">${MONTHS[m]}</text>`; lastMonth = m; }
+      }
+    }
+  }
+  const W = 53 * (C + G), H = T + 7 * (C + G);
+  const wd = ['Mo', '', 'Mi', '', 'Fr', '', ''].map((n, d) => n ? `<text class="axis" x="0" y="${T + d * (C + G) + C - 2}">${n}</text>` : '').join('');
+  host.innerHTML = `
+    <svg class="cal-days" width="${L}" height="${H}" aria-hidden="true">${wd}</svg>
+    <div class="cal-scroll"><svg width="${W}" height="${H}" viewBox="${L} 0 ${W} ${H}" role="img" aria-label="Trainingstage der letzten 12 Monate">${months}${cells}</svg></div>`;
+  const sc = $('.cal-scroll', host);
+  sc.scrollLeft = sc.scrollWidth;   // neueste Wochen sichtbar
+  host.querySelectorAll('.cal').forEach(r => r.onclick = () => {
+    host.querySelectorAll('.cal.sel').forEach(x => x.classList.remove('sel'));
+    r.classList.add('sel');
+    const d = r.dataset.d, v = day[d] || 0;
+    info.innerHTML = `<strong>${fmtDate(d)}</strong> · ${v ? fmt(v) : (ws.some(w => w.date === d) ? fmt(0) : 'kein Training')}`;
+  });
+}
+
 // ---------- Ansicht: Einstellungen & Daten ----------
 async function showSettings() {
   setHeader('Einstellungen', true);
@@ -1485,36 +1749,42 @@ function drawChart(host, tip, points, opts) {
   bindTip(svg, tip, show, () => cross.setAttribute('visibility', 'hidden'));
 }
 
-// Säulen-Diagramm (items: {label, value, tip}), Achse beginnt bei 0
-function drawBars(host, tip, items, { axisFmt, steps }) {
+// Säulen-Diagramm (items: {label, value, tip, avg?, partial?}), Achse beginnt bei 0.
+// avg = gleitender Durchschnitt als Linie in derselben Einheit, partial = laufender Abschnitt (hell)
+function drawBars(host, tip, items, { axisFmt, steps, labelEvery = 3 }) {
   const W = Math.max(host.clientWidth, 280), H = 170;
   const m = { t: 10, r: 10, b: 24, l: 44 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const max = Math.max(...items.map(i => i.value), 0);
+  const max = Math.max(...items.map(i => Math.max(i.value, i.avg ?? 0)), 0);
   const step = steps.find(s => (max || 1) / s <= 4) || steps[steps.length - 1];
   const hi = Math.max(step, Math.ceil(max / step) * step);
-  const slot = iw / items.length, bw = Math.max(4, slot - 4);   // 4px Abstand zwischen den Säulen
+  const slot = iw / items.length, bw = Math.max(3, slot - (slot > 12 ? 4 : 2));   // Abstand zwischen den Säulen
   const y = v => m.t + ih - (v / hi) * ih;
+  const cx = i => m.l + i * slot + slot / 2;
   const ticks = [];
   for (let v = 0; v <= hi + 1e-9; v += step) ticks.push(v);
   const grid = ticks.map(v => `
     <line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
     <text class="axis" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${axisFmt(v)}</text>`).join('');
+  const baseOp = it => it.partial ? 0.35 : 1;
   const bars = items.map((it, i) => it.value > 0
-    ? `<rect class="bar" data-i="${i}" x="${(m.l + i * slot + 2).toFixed(1)}" y="${y(it.value).toFixed(1)}" width="${bw.toFixed(1)}" height="${(m.t + ih - y(it.value)).toFixed(1)}" fill="var(--accent)"/>` : '').join('');
-  // Nur jede dritte Wochenbeschriftung, damit nichts überlappt
-  const labels = items.map((it, i) => (items.length - 1 - i) % 3 === 0
-    ? `<text class="axis" x="${(m.l + i * slot + slot / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${it.label}</text>` : '').join('');
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img">${grid}<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)" stroke-width="1"/>${bars}${labels}</svg>`;
+    ? `<rect class="bar" data-i="${i}" x="${(cx(i) - bw / 2).toFixed(1)}" y="${y(it.value).toFixed(1)}" width="${bw.toFixed(1)}" height="${(m.t + ih - y(it.value)).toFixed(1)}" fill="var(--accent)" opacity="${baseOp(it)}"/>` : '').join('');
+  const avgPts = items.map((it, i) => it.avg != null ? [cx(i), y(it.avg)] : null);
+  const avgPath = avgPts.reduce((d, p, i) => !p ? d : d + `${d && avgPts[i - 1] ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`, '');
+  const avgLine = avgPath ? `<path d="${avgPath}" fill="none" stroke="var(--card)" stroke-width="5" stroke-linejoin="round"/><path d="${avgPath}" fill="none" stroke="var(--pr-text)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+  const labels = items.map((it, i) => (items.length - 1 - i) % labelEvery === 0
+    ? `<text class="axis" x="${cx(i).toFixed(1)}" y="${H - 6}" text-anchor="middle">${it.label}</text>` : '').join('');
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img">${grid}<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)" stroke-width="1"/>${bars}${avgLine}${labels}</svg>`;
   const svg = $('svg', host);
+  const reset = () => svg.querySelectorAll('.bar').forEach(b => b.setAttribute('opacity', baseOp(items[b.dataset.i])));
   const show = ev => {
     const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
     const i = Math.min(items.length - 1, Math.max(0, Math.floor((px - m.l) / slot)));
-    svg.querySelectorAll('.bar').forEach(b => b.setAttribute('opacity', Number(b.dataset.i) === i ? 1 : 0.45));
+    svg.querySelectorAll('.bar').forEach(b => b.setAttribute('opacity', Number(b.dataset.i) === i ? 1 : 0.3 * baseOp(items[b.dataset.i])));
     tip.innerHTML = items[i].tip;
-    placeTip(tip, svg, (m.l + i * slot + slot / 2) * (r.width / W), y(items[i].value) * (r.height / H));
+    placeTip(tip, svg, cx(i) * (r.width / W), y(Math.max(items[i].value, items[i].avg ?? 0)) * (r.height / H));
   };
-  bindTip(svg, tip, show, () => svg.querySelectorAll('.bar').forEach(b => b.setAttribute('opacity', 1)));
+  bindTip(svg, tip, show, reset);
 }
 
 function placeTip(tip, svg, sx, sy) {
