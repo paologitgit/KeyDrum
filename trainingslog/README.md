@@ -6,7 +6,7 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 
 - **Neues Training:** Datum wählen (vorausgefüllt mit heute) und „Starten“ tippen. Bei heutigen Trainings wird die Startzeit automatisch gesetzt.
 - **Trainingsdauer:** Unten im Training „Training beendet“ tippen. Start und Ende lassen sich oben im Training korrigieren; die Dauer erscheint auch in der Trainingsliste.
-- **Länger nicht gemacht:** Übungen, die in keinem der letzten 5 Trainings vorkamen, erhalten einen roten Balken mit dem Datum der letzten Ausführung. Oben im Training stehen sie zusätzlich als Liste (antippen springt zur Übung). Die Startseite zeigt die letzten 5 Trainings als Raster.
+- **Länger nicht gemacht:** Übungen, die in keinem der letzten 5 Trainings (Anzahl unter „Einstellungen“ wählbar: 5, 8, 10 oder 12) vorkamen, erhalten einen roten Balken mit dem Datum der letzten Ausführung. Oben im Training stehen sie zusätzlich als Liste (antippen springt zur Übung). Die Startseite zeigt ebenso viele Trainings als Raster.
 - **Übungen:** Die Liste ist zu Beginn mit diesen Übungen gefüllt: Deadlift, Latzug, Sitting Row, Pull-up, Bankdrücken, Bizeps, Schulter seitlich, Rücken, Butterfly reverse.
 - **Sätze erfassen:** Gewicht (Komma oder Punkt), Wiederholungen optional, dann „+ Satz“. Das Gewicht vom letzten Satz ist bereits eingetragen.
 - **Letztes Training:** Jede Übung zeigt die Sätze aus dem letzten Training, in dem sie vorkam. Mit „Sätze übernehmen“ wird alles auf einmal kopiert.

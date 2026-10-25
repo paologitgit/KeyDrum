@@ -125,6 +125,10 @@
   .ov tbody th { text-align: left; font-weight: 500; padding-left: 12px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov .dot { display: inline-block; width: 14px; height: 14px; background: var(--accent); }
   .ov .no { display: inline-block; width: 14px; height: 14px; border: 1px dashed var(--soft-line); }
+  .ov.dense th, .ov.dense td { padding-left: 1px; padding-right: 1px; }
+  .ov.dense thead th { font-size: 11px; letter-spacing: 0; }
+  .ov.dense tbody th { max-width: 104px; font-size: 14px; padding-left: 10px; }
+  .ov.dense .dot, .ov.dense .no { width: 11px; height: 11px; }
   .ov tr.overdue th { color: var(--pr-text); box-shadow: inset 6px 0 0 var(--pr); padding-left: 14px; }
   .ov-legend { margin: 0; padding: 8px 12px 12px; font-size: 13px; }
   /* Trainingsdauer */
@@ -316,7 +320,8 @@ function workoutDuration(w, sets, end = w.end_time) {
   if (cardioMin) return { minutes: cardioMin, cardio: true, fallback: true };
   return null;
 }
-const OVERDUE_AFTER = 5;   // Übung gilt als „länger nicht gemacht“, wenn sie in den letzten 5 Trainings fehlt
+// Übung gilt als „länger nicht gemacht“, wenn sie in den letzten N Trainings fehlt (N in den Einstellungen)
+const overdueN = () => settings.overdue;
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; };
 const bestOf = (mode, sets) => Math.max(...sets.map(s => s[metricKey(mode)] ?? -Infinity));
 // Auswahl beim Anlegen einer Übung: Gewicht oder Zeit
@@ -341,7 +346,7 @@ function summarize(sets) {
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
 
 // ---------- Einstellungen (pro Gerät) ----------
-const SETTINGS_DEFAULT = { rest: 90, step: 2.5 };
+const SETTINGS_DEFAULT = { rest: 90, step: 2.5, overdue: 5 };
 const settings = (() => {
   try { return { ...SETTINGS_DEFAULT, ...JSON.parse(localStorage.getItem('tl_settings') || '{}') }; } catch { return { ...SETTINGS_DEFAULT }; }
 })();
@@ -495,7 +500,7 @@ function makeLocalStore(key, offlineIds) {
     },
     // Überblick: letzte Trainings (neueste zuerst) mit ihren Übungen + letztes Datum je Übung
     recent(db, list) {
-      const top = list.slice(0, OVERDUE_AFTER).map(w => ({ id: w.id, date: w.date,
+      const top = list.slice(0, overdueN()).map(w => ({ id: w.id, date: w.date,
         exercises: [...new Set(db.sets.filter(s => s.workout_id === w.id).map(s => s.exercise_id))] }));
       const dateOf = Object.fromEntries(list.map(w => [w.id, w.date])), last = {};
       for (const s of db.sets) { const d = dateOf[s.workout_id]; if (d && (!last[s.exercise_id] || d > last[s.exercise_id])) last[s.exercise_id] = d; }
@@ -895,19 +900,20 @@ async function showHome() {
   try { [workouts, ov, allEx, plans] = await Promise.all([store.workouts(), store.overview(), store.exercises(), store.plans()]); } catch (e) { return showPageError(e); }
   // Raster: Spalten = letzte Trainings (älteste links), Zeilen = aktive Übungen
   const cols = ov.workouts.slice().reverse();
-  const enough = ov.workouts.length >= OVERDUE_AFTER;
+  const enough = ov.workouts.length >= overdueN();
+  const dense = cols.length > 8;   // viele Spalten: schmaler, nur der Tag als Kopf
   const overviewHtml = cols.length ? `
     <h2>Letzte ${cols.length} Trainings</h2>
     <div class="card">
-      <table class="ov">
-        <thead><tr><th></th>${cols.map(c => `<th>${fmtShort(c.date)}</th>`).join('')}</tr></thead>
+      <table class="ov ${dense ? 'dense' : ''}">
+        <thead><tr><th></th>${cols.map(c => `<th title="${fmtDate(c.date)}">${dense ? `${Number(c.date.slice(8))}.` : fmtShort(c.date)}</th>`).join('')}</tr></thead>
         <tbody>${allEx.map(ex => {
           const doneAny = cols.some(c => c.exercises.includes(ex.id));
           return `<tr class="${enough && !doneAny ? 'overdue' : ''}"><th>${esc(ex.name)}</th>${cols.map(c =>
             `<td>${c.exercises.includes(ex.id) ? '<span class="dot" aria-label="gemacht"></span>' : '<span class="no" aria-label="nicht gemacht"></span>'}</td>`).join('')}</tr>`;
         }).join('')}</tbody>
       </table>
-      <p class="muted ov-legend">■ gemacht${enough ? ' · <span class="overdue-tag">Rot</span>: in keinem der letzten 5 Trainings' : ''}</p>
+      <p class="muted ov-legend">■ gemacht${enough ? ' · <span class="overdue-tag">Rot</span>: in keinem der letzten ${overdueN()} Trainings' : ''} · Anzahl unter „Einstellungen“</p>
     </div>` : '';
   const lastPlan = lsGet('tl_lastplan', '');
   app.innerHTML = `
@@ -976,9 +982,9 @@ async function showWorkout(id) {
   const bestVal = exId => w.best[exId]?.[metricKey(modeOf[exId])] ?? null;
   const isPr = (exId, set) => { const b = bestVal(exId), v = set[metricKey(modeOf[exId])]; return b !== null && v != null && v > b; };
 
-  // Länger nicht gemacht: in keinem der letzten 5 Trainings davor und heute noch nicht erfasst
+  // Länger nicht gemacht: in keinem der letzten N Trainings davor und heute noch nicht erfasst
   const recentDone = new Set(w.recent.workouts.flatMap(r => r.exercises));
-  const isOverdue = ex => ex.active && w.recent.workouts.length >= OVERDUE_AFTER && !recentDone.has(ex.id) && !setsBy[ex.id];
+  const isOverdue = ex => ex.active && w.recent.workouts.length >= overdueN() && !recentDone.has(ex.id) && !setsBy[ex.id];
   const lastTxt = ex => w.recent.last[ex.id] ? `zuletzt ${fmtDate(w.recent.last[ex.id])}` : 'noch nie gemacht';
   const overdue = exercises.filter(isOverdue);
 
@@ -1664,6 +1670,11 @@ async function showSettings() {
       <p class="muted hint">Läuft unten am Bildschirm mit. Am Ende vibriert das Smartphone (nicht auf dem iPhone) und es ertönt ein kurzer Ton.</p>
     </div>
     <div class="card pad">
+      <label>„Länger nicht gemacht“</label>
+      ${seg('overdue', [[5, '5 Trainings'], [8, '8'], [10, '10'], [12, '12']], settings.overdue)}
+      <p class="muted hint">Übungen, die in so vielen zurückliegenden Trainings nicht vorkamen, werden rot markiert. Die Übersicht auf der Startseite zeigt ebenso viele Trainings. Wer häufig und auch kurz trainiert, wählt eine höhere Zahl.</p>
+    </div>
+    <div class="card pad">
       <label>Steigerung beim Vorschlag</label>
       ${seg('step', [[1, '1 kg'], [1.25, '1,25 kg'], [2.5, '2,5 kg'], [5, '5 kg']], settings.step)}
       <p class="muted hint">Hatte beim letzten Mal ein Satz mehr als 14 Wiederholungen, schlägt die App so viel mehr Gewicht vor. Bei Übungen, die unter „Übungen“ als „Rücken“ markiert sind, nur die Hälfte.</p>
@@ -1676,6 +1687,7 @@ async function showSettings() {
       <p class="muted hint">Eine Zeile pro Satz, mit Datum, Dauer, Tagesform und Körpergewicht. Lässt sich in Excel oder Numbers öffnen und dient als Sicherung.</p>
     </div>`;
   app.querySelectorAll('input[name="rest"]').forEach(r => r.onchange = () => { settings.rest = Number(r.value); saveSettings(); toast(settings.rest ? `Pause: ${fmtClock(settings.rest)} min` : 'Pausentimer aus'); });
+  app.querySelectorAll('input[name="overdue"]').forEach(r => r.onchange = () => { settings.overdue = Number(r.value); saveSettings(); toast(`Übersicht: letzte ${settings.overdue} Trainings`); });
   app.querySelectorAll('input[name="step"]').forEach(r => r.onchange = () => { settings.step = Number(r.value); saveSettings(); toast(`Steigerung: ${fmtW(settings.step)} kg`); });
   if ($('#syncNow')) $('#syncNow').onclick = async () => { $('#syncNow').disabled = true; await Sync.sync(); toast(Sync.online ? 'Abgeglichen' : 'Server nicht erreichbar'); showSettings(); };
   $('#exportCsv').onclick = async () => {
