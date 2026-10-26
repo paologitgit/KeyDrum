@@ -246,6 +246,23 @@
   .cal-legend span.c1 { background: var(--accent); opacity: .25; } .cal-legend span.c2 { background: var(--accent); opacity: .5; }
   .cal-legend span.c3 { background: var(--accent); opacity: .75; } .cal-legend span.c4 { background: var(--accent); }
   .cal-info { margin: 8px 0 0; font-size: 14px; min-height: 20px; }
+  /* Balance */
+  .hb { display: grid; grid-template-columns: 132px 1fr 62px; gap: 8px; align-items: center; padding: 4px 0; font-size: 14px; }
+  .ht { height: 12px; border: 1px solid var(--soft-line); }
+  .ht span { display: block; height: 100%; background: var(--accent); }
+  .hv { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .hv small { font-weight: 400; color: var(--muted); }
+  .ratio { display: flex; height: 28px; border: 1.5px solid var(--line); margin-top: 4px; }
+  .ratio span { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; overflow: hidden; white-space: nowrap; }
+  .ratio .r1 { background: var(--accent); color: var(--accent-text); }
+  .ratio .r2 { background: var(--card); border-left: 1.5px solid var(--line); }
+  .hints { margin: 12px 0 0; padding-left: 18px; font-size: 14px; }
+  .hints li { margin: 4px 0; }
+  .notes { margin: 0; padding-left: 18px; font-size: 14px; }
+  .notes li { margin: 5px 0; white-space: pre-line; }
+  .rpe11 { grid-template-columns: repeat(11, 1fr); gap: 3px; }
+  .rpe11 button { font-size: 15px; }
+  .mng .area-sel { grid-column: 1 / -1; order: 10; min-height: 38px; padding: 6px 10px; font-size: 14px; }
   /* Einstellungen */
   .seg.wrap { flex-wrap: wrap; border: 0; gap: 6px; overflow: visible; }
   .seg.wrap span { border: 1.5px solid var(--line) !important; border-radius: 3px; }
@@ -271,7 +288,7 @@
 <script>
 // ---------- Konfiguration ----------
 const API_URL = 'api.php';          // Pfad zur PHP-API
-const API_VERSION_NEEDED = 7;       // muss zu API_VERSION in api.php passen
+const API_VERSION_NEEDED = 8;       // muss zu API_VERSION in api.php passen
 const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
   'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse', 'Fahrradfahren:cardio', 'Joggen:cardio'];
 
@@ -303,6 +320,33 @@ const fmtSet = s => {
 const MODES = { weight: 'Gewicht', time: '⏱ Zeit', cardio: 'Ausdauer' };
 // Vorbelegung „belastet den Rücken“ nach dem Namen (in „Übungen“ änderbar)
 const guessBack = name => /dead|kreuzheb|lat|rudern|row|pull|klimm|(^|\s)rücken|butterfly reverse|reverse fly|hyperext/i.test(name);
+// Körperbereiche für die Auswertung „Balance“: [Bezeichnung, Gruppe]
+const AREAS = {
+  pull_v: ['Ziehen vertikal', 'Oberkörper ziehen'], pull_h: ['Ziehen horizontal', 'Oberkörper ziehen'],
+  push_h: ['Drücken horizontal', 'Oberkörper drücken'], push_v: ['Drücken vertikal', 'Oberkörper drücken'],
+  shoulder_arms: ['Schulter / Arme', 'Schulter / Arme'], hinge: ['Hüftbeuge', 'Beine & Hüfte'], legs: ['Beine', 'Beine & Hüfte'],
+  core: ['Rumpf', 'Rumpf & Entlastung'], relief: ['Entlastung / Mobilität', 'Rumpf & Entlastung'],
+  cardio: ['Ausdauer', null], other: ['Sonstiges', 'Sonstiges'],
+};
+const AREA_GROUPS = ['Oberkörper ziehen', 'Oberkörper drücken', 'Schulter / Arme', 'Beine & Hüfte', 'Rumpf & Entlastung', 'Sonstiges'];
+// Zuordnung nach dem Namen (Reihenfolge wichtig: „Leg Press“ vor „Press“, „Butterfly reverse“ vor „Butterfly“)
+function guessArea(name, mode) {
+  const n = name.toLowerCase();
+  if (mode === 'cardio') return 'cardio';
+  const rules = [
+    ['core', /pallof|plank|stütz|vierfüss|bird ?dog|dead ?bug|crunch|bauch|rumpf|curl-?up|sit-?up|russian|ab wheel/],
+    ['relief', /häng|hang|mobil|dehn|stretch|katze|cat ?cow/],
+    ['legs', /squat|kniebeug|lunge|ausfall|leg ?press|beinpress|step ?up|waden|beinstreck|beinbeug|leg ?curl|leg ?ext|adduk|abduk/],
+    ['hinge', /dead|kreuzheb|rdl|hip ?thrust|glute|bridge|good ?morning|hyperext|rückenstreck|(^|\s)rücken/],
+    ['pull_h', /row|rudern|butterfly reverse|reverse fly|face ?pull/],
+    ['pull_v', /lat|pull|klimm|chin/],
+    ['push_v', /overhead|schulterdrück|military|ohp|arnold/],
+    ['push_h', /bank|bench|liegestütz|push ?up|dips|brustpress|chest|fly|butterfly/],
+    ['shoulder_arms', /bizeps|biceps|curl|trizeps|triceps|seitheben|seitlich|lateral|front ?raise|unterarm|shrug/],
+  ];
+  return (rules.find(([, re]) => re.test(n)) || ['other'])[0];
+}
+const areaOf = ex => (ex.area && AREAS[ex.area]) ? ex.area : guessArea(ex.name, ex.mode || 'weight');
 const metricKey = mode => ({ time: 'duration', cardio: 'distance' })[mode] || 'weight';
 const fmtMetric = (mode, v) => mode === 'time' ? fmtDur(v) : mode === 'cardio' ? `${fmtW(v)} km` : `${fmtW(v)} kg`;
 const nowHM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -457,6 +501,7 @@ function makeLocalStore(key, offlineIds) {
       if ('active' in fields) ex.active = !!fields.active;
       if ('mode' in fields) ex.mode = MODES[fields.mode] ? fields.mode : 'weight';
       if ('back' in fields) ex.back = !!fields.back;
+      if ('area' in fields) ex.area = AREAS[fields.area] ? fields.area : null;
       this.save(db);
     },
     async reorderExercises(ids) {
@@ -538,7 +583,7 @@ function makeLocalStore(key, offlineIds) {
       const db = this.load(), w = db.workouts.find(x => x.id === id);
       if (!w) return;
       if ('note' in fields) w.note = (fields.note || '').trim() || null;
-      for (const k of ['date', 'start_time', 'end_time', 'rpe', 'body_weight', 'plan_id']) if (k in fields) w[k] = fields[k] ?? null;
+      for (const k of ['date', 'start_time', 'end_time', 'rpe', 'back_score', 'body_weight', 'plan_id']) if (k in fields) w[k] = fields[k] ?? null;
       this.save(db);
     },
     async deleteWorkout(id) { const db = this.load(); db.workouts = db.workouts.filter(w => w.id !== id); db.sets = db.sets.filter(s => s.workout_id !== id); this.save(db); },
@@ -555,7 +600,8 @@ function makeLocalStore(key, offlineIds) {
       return db.workouts.slice().sort(this.byDate).map(w => {
         const s = db.sets.filter(x => x.workout_id === w.id);
         return {
-          id: w.id, date: w.date, rpe: w.rpe ?? null, body_weight: w.body_weight ?? null,
+          id: w.id, date: w.date, rpe: w.rpe ?? null, back_score: w.back_score ?? null, body_weight: w.body_weight ?? null, note: w.note || null,
+          exercises: [...new Set(s.map(x => x.exercise_id))],
           minutes: workoutDuration(w, s)?.minutes ?? null,
           volume: s.reduce((sum, x) => sum + (x.weight && x.reps ? x.weight * x.reps : 0), 0),
           distance: s.reduce((sum, x) => sum + (x.distance || 0), 0),
@@ -568,7 +614,7 @@ function makeLocalStore(key, offlineIds) {
       const db = this.load();
       const modeOf = Object.fromEntries(db.exercises.map(e => [e.id, e.mode || 'weight']));
       return {
-        exercises: db.exercises.map(e => ({ id: e.id, name: e.name, mode: e.mode || 'weight' })),
+        exercises: db.exercises.map(e => ({ id: e.id, name: e.name, mode: e.mode || 'weight', area: e.area || null })),
         workouts: db.workouts.map(w => {
           const s = db.sets.filter(x => x.workout_id === w.id);
           return {
@@ -588,16 +634,16 @@ function makeLocalStore(key, offlineIds) {
       const exById = Object.fromEntries(db.exercises.map(e => [e.id, e]));
       const planById = Object.fromEntries(db.plans.map(p => [p.id, p.name]));
       const num = v => v == null ? '' : fmtW(v);
-      const rows = [['Datum', 'Start', 'Ende', 'Dauer (min)', 'Tagesform', 'Körpergewicht (kg)', 'Plan', 'Notiz', 'Übung', 'Art', 'Satz', 'Gewicht (kg)', 'Wdh.', 'Zeit (s)', 'Distanz (km)']];
+      const rows = [['Datum', 'Start', 'Ende', 'Dauer (min)', 'Tagesform', 'Rückenbefinden', 'Körpergewicht (kg)', 'Plan', 'Notiz', 'Übung', 'Art', 'Bereich', 'Satz', 'Gewicht (kg)', 'Wdh.', 'Zeit (s)', 'Distanz (km)']];
       for (const w of db.workouts.slice().sort(this.byDate)) {
         const head = [w.date, w.start_time || '', w.end_time || '', workoutDuration(w, db.sets.filter(s => s.workout_id === w.id))?.minutes ?? '',
-          w.rpe ?? '', num(w.body_weight), planById[w.plan_id] || '', w.note || ''];
+          w.rpe ?? '', w.back_score ?? '', num(w.body_weight), planById[w.plan_id] || '', w.note || ''];
         const sets = db.sets.filter(s => s.workout_id === w.id)
           .sort((a, b) => db.exercises.indexOf(exById[a.exercise_id]) - db.exercises.indexOf(exById[b.exercise_id]) || a.set_no - b.set_no);
-        if (!sets.length) rows.push([...head, '', '', '', '', '', '', '']);
+        if (!sets.length) rows.push([...head, '', '', '', '', '', '', '', '']);
         for (const s of sets) {
           const ex = exById[s.exercise_id];
-          rows.push([...head, ex?.name || '', { time: 'Zeit', cardio: 'Ausdauer' }[ex?.mode] || 'Gewicht', s.set_no, num(s.weight), s.reps ?? '', s.duration ?? '', num(s.distance)]);
+          rows.push([...head, ex?.name || '', { time: 'Zeit', cardio: 'Ausdauer' }[ex?.mode] || 'Gewicht', ex ? AREAS[areaOf(ex)][0] : '', s.set_no, num(s.weight), s.reps ?? '', s.duration ?? '', num(s.distance)]);
         }
       }
       return rows;
@@ -944,7 +990,7 @@ async function showHome() {
         <div class="list-item" data-id="${w.id}">
           <div class="grow">
             <div class="date">${fmtDate(w.date)}</div>
-            <div class="muted">${w.plan_name ? `${esc(w.plan_name)} · ` : ''}${w.exercise_count} ${w.exercise_count === 1 ? 'Übung' : 'Übungen'} · ${w.set_count} ${w.set_count === 1 ? 'Satz' : 'Sätze'}${w.minutes ? ` · ${fmtMin(w.minutes)}` : ''}${w.rpe ? ` · Form ${w.rpe}/10` : ''}</div>
+            <div class="muted">${w.plan_name ? `${esc(w.plan_name)} · ` : ''}${w.exercise_count} ${w.exercise_count === 1 ? 'Übung' : 'Übungen'} · ${w.set_count} ${w.set_count === 1 ? 'Satz' : 'Sätze'}${w.minutes ? ` · ${fmtMin(w.minutes)}` : ''}${w.rpe ? ` · Form ${w.rpe}/10` : ''}${w.back_score != null ? ` · Rücken ${w.back_score}/10` : ''}</div>
             ${w.note ? `<div class="note">${esc(w.note)}</div>` : ''}
           </div>
           <span class="muted">›</span>
@@ -1085,6 +1131,12 @@ async function showWorkout(id) {
         ${Array.from({ length: 10 }, (_, i) => i + 1).map(v => `<button role="radio" aria-checked="${w.rpe === v}" class="${w.rpe === v ? 'on' : ''}" data-rpe="${v}">${v}</button>`).join('')}
       </div>
       <div class="rpe-scale muted"><span>schlecht</span><span>top</span></div>
+      <div class="field"><label>Rückenbefinden</label>
+        <div class="rpe rpe11" role="radiogroup" aria-label="Rückenbefinden von 0 (starke Beschwerden) bis 10 (beschwerdefrei)">
+          ${Array.from({ length: 11 }, (_, i) => i).map(v => `<button role="radio" aria-checked="${w.back_score === v}" class="${w.back_score === v ? 'on' : ''}" data-bs="${v}">${v}</button>`).join('')}
+        </div>
+        <div class="rpe-scale muted"><span>starke Beschwerden</span><span>beschwerdefrei</span></div>
+      </div>
       <div class="field"><label for="wBw">Körpergewicht (kg)</label><input id="wBw" inputmode="decimal" placeholder="optional" value="${w.body_weight != null ? fmtW(w.body_weight) : ''}"></div>
       <div class="field"><label for="wNote">Notiz</label><textarea id="wNote" maxlength="255" placeholder="z. B. Schulter etwas müde">${esc(w.note)}</textarea></div>
     </div>
@@ -1113,6 +1165,11 @@ async function showWorkout(id) {
     const v = Number(b.dataset.rpe), next = w.rpe === v ? null : v;   // nochmals antippen = entfernen
     await update({ rpe: next }); w.rpe = next;
     app.querySelectorAll('[data-rpe]').forEach(x => { const on = Number(x.dataset.rpe) === next; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
+  });
+  app.querySelectorAll('[data-bs]').forEach(b => b.onclick = async () => {
+    const v = Number(b.dataset.bs), next = w.back_score === v ? null : v;   // nochmals antippen = entfernen
+    await update({ back_score: next }); w.back_score = next;
+    app.querySelectorAll('[data-bs]').forEach(x => { const on = Number(x.dataset.bs) === next; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
   });
   if ($('#wPlan')) $('#wPlan').onchange = async e => { await update({ plan_id: e.target.value ? Number(e.target.value) : null }); state.showAll = false; showWorkout(id); };
   if ($('#toggleAll')) $('#toggleAll').onclick = () => { state.showAll = !state.showAll; showWorkout(id); };
@@ -1204,7 +1261,7 @@ async function showExercises() {
   try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
-    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. Der Bereich (z. B. Ziehen, Drücken, Beine, Rumpf) wird für die Auswertung „Balance“ genutzt; die App schlägt ihn nach dem Namen vor. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
     <div class="card">
       ${active.map((e, i) => `
         <div class="mng" data-id="${e.id}">
@@ -1213,6 +1270,10 @@ async function showExercises() {
           ${(e.mode || 'weight') === 'weight' ? `<button class="back-btn ${e.back ? 'on' : ''}" aria-pressed="${!!e.back}" aria-label="Belastet den Rücken: ${e.back ? 'ja' : 'nein'} – antippen zum Wechseln">Rücken</button>` : ''}
           <button class="up" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
           <button class="down" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
+          ${(e.mode || 'weight') !== 'cardio' ? `<select class="area-sel" aria-label="Körperbereich">
+            <option value="">Bereich automatisch: ${AREAS[guessArea(e.name, e.mode || 'weight')][0]}</option>
+            ${Object.entries(AREAS).filter(([k]) => k !== 'cardio').map(([k, [l]]) => `<option value="${k}" ${e.area === k ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>` : ''}
           <button class="hide-btn" aria-label="Ausblenden" title="Ausblenden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
         </div>`).join('') || '<div class="empty">Keine aktiven Übungen.</div>'}
     </div>
@@ -1246,6 +1307,10 @@ async function showExercises() {
     $('.mode-btn', row).onclick = async () => {
       const order = Object.keys(MODES), mode = order[(order.indexOf(active[idx].mode || 'weight') + 1) % order.length];
       try { await store.updateExercise(exId, { mode }); toast({ weight: 'Wird mit Gewicht erfasst', time: 'Wird mit Zeit erfasst', cardio: 'Wird mit Distanz und Dauer erfasst' }[mode]); showExercises(); } catch (e) { showError(e); }
+    };
+    const areaSel = $('.area-sel', row);
+    if (areaSel) areaSel.onchange = async () => {
+      try { await store.updateExercise(exId, { area: areaSel.value || null }); active[idx].area = areaSel.value || null; toast('Bereich gespeichert'); } catch (e) { showError(e); }
     };
     const backBtn = $('.back-btn', row);
     if (backBtn) backBtn.onclick = async () => {
@@ -1324,8 +1389,8 @@ const fmtHours = m => `${fmtW(Math.round(m / 6) / 10)} h`;
 
 async function showStats() {
   setHeader('Statistik', true);
-  let list;
-  try { list = await store.stats(); } catch (e) { return showPageError(e); }
+  let list, exList;
+  try { [list, exList] = await Promise.all([store.stats(), store.exercises(true)]); } catch (e) { return showPageError(e); }
   if (!list.length) { app.innerHTML = '<div class="card empty">Noch keine Trainings erfasst.</div>'; return; }
 
   // Letzte 12 Wochen (Montag bis Sonntag), älteste zuerst
@@ -1342,6 +1407,14 @@ async function showStats() {
   }
   const last4 = weeks.slice(-4).reduce((s, w) => s + w.count, 0);
   const withMin = list.filter(t => t.minutes), withRpe = list.filter(t => t.rpe), withBw = list.filter(t => t.body_weight);
+  const withBack = list.filter(t => t.back_score != null);
+  // Rückenbefinden je Übung: Ø in Trainings mit dieser Übung gegenüber dem Gesamtschnitt (ab 5 bewerteten Trainings)
+  const backAvg = withBack.length ? withBack.reduce((s, t) => s + t.back_score, 0) / withBack.length : null;
+  const backRows = withBack.length >= 5 ? exList.map(ex => {
+    const ts = withBack.filter(t => t.exercises.includes(ex.id));
+    return ts.length >= 3 ? { ex, n: ts.length, avg: ts.reduce((s, t) => s + t.back_score, 0) / ts.length } : null;
+  }).filter(Boolean).sort((a, b) => b.avg - a.avg) : [];
+  const notes = list.filter(t => t.note).slice(-12).reverse();
   const avg = (arr, k) => arr.reduce((s, x) => s + x[k], 0) / arr.length;
 
   // Tagesform nach Wochentag
@@ -1370,7 +1443,23 @@ async function showStats() {
         <div class="wd-row"><span class="wd-n">${n}</span><span class="wd-bar"><span style="width:${wd[i].sum / wd[i].n * 10}%"></span></span><span class="wd-v">${fmtW(Math.round(wd[i].sum / wd[i].n * 10) / 10)} <span class="muted">(${wd[i].n}×)</span></span></div>` : '').join('')}
       </div>
     </div>` : `<div class="card pad muted">Tagesform: am Ende eines Trainings unter „Nach dem Training“ 1–10 antippen. Hier erscheinen dann Verlauf und Durchschnitt pro Wochentag.</div>`}
-    ${withBw.length ? `<div class="card chart-card"><h3>Körpergewicht (kg)</h3><div id="cBw"></div><div class="tip"></div></div>` : ''}`;
+    ${withBw.length ? `<div class="card chart-card"><h3>Körpergewicht (kg)</h3><div id="cBw"></div><div class="tip"></div></div>` : ''}
+    <h2>Rücken</h2>
+    ${withBack.length ? `
+    <div class="card chart-card"><h3>Rückenbefinden pro Training</h3><div id="cBack"></div><div class="tip"></div>
+      <p class="muted chart-note">0 = starke Beschwerden, 10 = beschwerdefrei · Ø ${fmtDec(backAvg)}</p></div>
+    ${backRows.length ? `
+    <div class="card">
+      <table class="ov vt">
+        <thead><tr><th>Übung</th><th>Trainings</th><th>Ø Rücken</th><th>ggü. Ø</th></tr></thead>
+        <tbody>${backRows.map(r => { const d = r.avg - backAvg; return `<tr><th>${esc(r.ex.name)}</th><td>${r.n}</td><td><strong>${fmtDec(r.avg)}</strong></td><td>${Math.abs(d) < 0.05 ? '=' : d > 0 ? `↑ +${fmtDec(d)}` : `<span class="overdue-tag">↓ −${fmtDec(-d)}</span>`}</td></tr>`; }).join('')}</tbody>
+      </table>
+      <p class="muted ov-legend">Rückenbefinden in Trainings mit dieser Übung im Vergleich zum Durchschnitt (Übungen ab 3 bewerteten Trainings). Zeigt einen Zusammenhang, nicht die Ursache – hilfreich als Hinweis, worauf Sie achten können.</p>
+    </div>` : `<div class="card pad muted">Ab 5 Trainings mit Rückenbefinden erscheint hier, in welchen Trainings es Ihrem Rücken eher besser oder schlechter ging – je Übung.</div>`}`
+    : `<div class="card pad muted">Rückenbefinden: am Ende eines Trainings unter „Nach dem Training“ 0–10 antippen. Hier erscheinen dann der Verlauf und eine Auswertung je Übung.</div>`}
+    ${notes.length ? `
+    <h2>Notizen</h2>
+    <div class="card pad"><ul class="notes">${notes.map(t => `<li><strong>${fmtShort(t.date)}</strong> ${esc(t.note)}</li>`).join('')}</ul></div>` : ''}`;
 
   const tipOf = id => $(`#${id}`).parentElement.querySelector('.tip');
   drawBars($('#cCount'), tipOf('cCount'), weeks.map(w => ({ label: weekLabel(w), value: w.count, tip: `${weekLabel(w)} · ab ${fmtShort(w.start)}<br><strong>${w.count} ${w.count === 1 ? 'Training' : 'Trainings'}</strong>` })),
@@ -1383,6 +1472,8 @@ async function showStats() {
     { axisFmt: v => fmtW(v), steps: [1, 2, 5, 10, 20, 25, 50, 100, 200, 500] });
   if (withRpe.length) drawChart($('#cRpe'), tipOf('cRpe'), withRpe.map(t => ({ date: t.date, max: t.rpe })),
     { fmt: v => `${v}/10`, axisFmt: v => String(v), steps: [1, 2], range: [0, 10], label: 'Tagesform pro Training' });
+  if (withBack.length) drawChart($('#cBack'), tipOf('cBack'), withBack.map(t => ({ date: t.date, max: t.back_score })),
+    { fmt: v => `${v}/10`, axisFmt: v => String(v), steps: [1, 2, 5], range: [0, 10], label: 'Rückenbefinden pro Training' });
   if (withBw.length) drawChart($('#cBw'), tipOf('cBw'), withBw.map(t => ({ date: t.date, max: t.body_weight })),
     { fmt: v => `${fmtW(v)} kg`, axisFmt: fmtW, steps: [0.5, 1, 2, 5, 10], label: 'Körpergewicht' });
 }
@@ -1542,6 +1633,7 @@ async function showVolume() {
       <p class="muted ov-legend">Kraft- und Zeit-Übungen: Anzahl Sätze · Ausdauer: km. „davor“ = die 3 Monate vor den letzten 3 Monaten.${hasPrevPeriod ? '' : ' Für den Vergleich fehlen noch Daten.'}</p>`
       : '<div class="empty">In den letzten 6 Monaten wurden keine Übungen erfasst.</div>'}
     </div>
+    ${balanceHtml(ws, data.exercises, pref.range === '3m' ? addDays(t, -90) : pref.range === '12m' ? addDays(t, -364) : '0000-00-00', VOL_RANGES[pref.range])}
     <h2>Jahreskalender</h2>
     <div class="card pad">
       <div class="cal-wrap" id="calWrap"></div>
@@ -1611,6 +1703,53 @@ function fourWeeksHtml(ws, exercises) {
         </tbody>
       </table>
       <p class="muted ov-legend">Pfeile: Veränderung gegenüber der Vorwoche. „jetzt“ = laufende Woche bis heute. · = nicht trainiert.</p>
+    </div>`;
+}
+
+// Balance: Kraftsätze nach Körperbereich im gewählten Zeitraum
+function balanceHtml(ws, exercises, from, rangeLabel) {
+  const exById = Object.fromEntries(exercises.map(e => [e.id, e]));
+  const by = {}; let total = 0;
+  for (const w of ws) {
+    if (w.date < from) continue;
+    for (const s of w.per) {
+      const ex = exById[s.e]; if (!ex) continue;
+      const a = areaOf(ex); if (a === 'cardio') continue;
+      by[a] = (by[a] || 0) + 1; total++;
+    }
+  }
+  if (!total) return '';
+  const g = Object.fromEntries(AREA_GROUPS.map(n => [n, 0]));
+  for (const [a, n] of Object.entries(by)) g[AREAS[a][1]] += n;
+  const pull = g['Oberkörper ziehen'], push = g['Oberkörper drücken'];
+  const lower = g['Beine & Hüfte'], upper = pull + push + g['Schulter / Arme'], core = g['Rumpf & Entlastung'];
+  const pct = n => Math.round(n / total * 100);
+  const bar = (label, n, max, extra = '') => `<div class="hb"><span class="hl">${label}</span><span class="ht"><span style="width:${(n / max * 100).toFixed(1)}%"></span></span><span class="hv">${n}${extra}</span></div>`;
+  const groups = AREA_GROUPS.filter(n => g[n] || n !== 'Sonstiges');
+  const gMax = Math.max(...groups.map(n => g[n]), 1);
+  const details = Object.entries(by).sort((a, b) => b[1] - a[1]);
+  // Hinweise nur mit genügend Daten und bewusst zurückhaltend formuliert
+  const hints = [];
+  if (total >= 20) {
+    if (pull && !push) hints.push('Drücken fehlt im Zeitraum ganz.');
+    else if (push && pull / push > 3) hints.push(`Drücken kommt eher kurz (Ziehen : Drücken ${fmtDec(pull / push)} : 1). Längerfristig ist etwa 2 : 1 ein guter Richtwert.`);
+    else if (push > pull) hints.push('Mehr Drücken als Ziehen – für Haltung und oberen Rücken lohnt sich meist ein Überhang beim Ziehen.');
+    if (lower / total < 0.25) hints.push(`Beine & Hüfte machen ${pct(lower)} % aus. Kräftige Beine und Gesäß entlasten den unteren Rücken.`);
+    if (!core) hints.push('Keine Rumpf- oder Entlastungsübungen im Zeitraum.');
+    if (!by.hinge && lower) hints.push('Keine Hüftbeuge-Übung (z. B. Deadlift, Glute Bridge) im Zeitraum.');
+  }
+  return `
+    <h2>Balance · ${rangeLabel}</h2>
+    <div class="card pad">
+      <label>Schwerpunkte</label>
+      ${groups.map(n => bar(n, g[n], gMax, ` <small>(${pct(g[n])} %)</small>`)).join('')}
+      <label style="margin-top:16px">Ziehen und Drücken</label>
+      ${pull + push ? `<div class="ratio"><span class="r1" style="width:${Math.max(pull / (pull + push) * 100, push ? 0 : 100)}%">${pull ? `Ziehen ${pull}` : ''}</span>${push ? `<span class="r2" style="width:${push / (pull + push) * 100}%">${push}</span>` : ''}</div>
+      <p class="muted hint" style="margin-top:4px">${push ? `Ziehen : Drücken = ${fmtDec(pull / push)} : 1 · ` : ''}Oberkörper ${upper} Sätze, Beine & Hüfte ${lower} Sätze, Rumpf & Entlastung ${core} Sätze</p>` : '<p class="muted hint">Keine Zieh- oder Drückübungen im Zeitraum.</p>'}
+      ${hints.length ? `<ul class="hints">${hints.map(h => `<li>${h}</li>`).join('')}</ul>` : total < 20 ? '<p class="muted hint">Für Hinweise zur Balance braucht es mindestens 20 Sätze im Zeitraum.</p>' : '<p class="muted hint">Keine Auffälligkeiten bei der Verteilung.</p>'}
+      <label style="margin-top:16px">Bewegungsmuster</label>
+      ${details.map(([a, n]) => bar(AREAS[a][0], n, details[0][1])).join('')}
+      <p class="muted hint">Kraftsätze ohne Ausdauer. Die Zuordnung der Übungen ändern Sie unter „Übungen“.</p>
     </div>`;
 }
 

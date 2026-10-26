@@ -93,6 +93,8 @@ if ($cfg) {
             'Trainingsdauer' => $col('workouts', 'start_time'),
             'Tagesform, Körpergewicht, Pläne' => $col('workouts', 'rpe'),
             'Ausdauer (Distanz)' => $col('sets', 'distance_km'),
+            'Rücken-Markierung' => $col('exercises', 'back'),
+            'Körperbereiche, Rückenbefinden' => $col('exercises', 'area'),
         );
         $missing = array_keys(array_filter($features, function ($v) { return !$v; }));
         check('Datenbank-Stand', !$missing, $missing

@@ -30,3 +30,7 @@ INSERT IGNORE INTO exercises (name, mode, sort_order) VALUES ('Fahrradfahren', '
 -- 5) Rücken-Markierung für moderatere Steigerungsvorschläge
 ALTER TABLE exercises ADD COLUMN back TINYINT(1) NOT NULL DEFAULT 0 AFTER mode;
 UPDATE exercises SET back = 1 WHERE mode = 'weight' AND (name LIKE '%dead%' OR name LIKE '%kreuzheb%' OR name LIKE '%lat%' OR name LIKE '%rudern%' OR name LIKE '%row%' OR name LIKE '%pull%' OR name LIKE '%klimm%' OR name LIKE 'rücken%' OR name LIKE '% rücken%' OR name LIKE '%butterfly reverse%' OR name LIKE '%reverse fly%' OR name LIKE '%hyperext%');
+
+-- 6) Körperbereich pro Übung und Rückenbefinden pro Training
+ALTER TABLE exercises ADD COLUMN area VARCHAR(20) NULL AFTER back;
+ALTER TABLE workouts ADD COLUMN back_score TINYINT UNSIGNED NULL;

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS exercises (
   name        VARCHAR(100) NOT NULL,
   mode        VARCHAR(10) NOT NULL DEFAULT 'weight',   -- 'weight' = kg × Wdh., 'time' = Dauer, 'cardio' = Distanz + Dauer
   back        TINYINT(1) NOT NULL DEFAULT 0,          -- 1 = belastet den Rücken: moderatere Steigerung
+  area        VARCHAR(20) NULL,                       -- Körperbereich; leer = Zuordnung nach dem Namen
   sort_order  INT NOT NULL DEFAULT 0,
   active      TINYINT(1) NOT NULL DEFAULT 1,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS workouts (
   end_time      TIME NULL,
   note          VARCHAR(255) NULL,
   rpe           TINYINT UNSIGNED NULL,          -- Tagesform 1–10
+  back_score    TINYINT UNSIGNED NULL,          -- Rückenbefinden 0 (starke Beschwerden) – 10 (beschwerdefrei)
   body_weight   DECIMAL(5,2) NULL,              -- Körpergewicht in kg
   plan_id       INT UNSIGNED NULL,
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

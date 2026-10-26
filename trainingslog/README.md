@@ -24,6 +24,8 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Fortschrittsvorschlag:** Hatte beim letzten Mal ein Satz mehr als 14 Wiederholungen, schlägt die App das Gewicht dieses Satzes plus die eingestellte Steigerung vor (Standard +2,5 kg) und trägt es gleich ein. Übungen, die unter „Übungen“ als **Rücken** markiert sind, erhalten nur die halbe Steigerung. Vormarkiert (nach Namen): Deadlift, Latzug, Sitting Row, Pull-up, Rücken, Butterfly reverse.
 - **Trainingspläne:** Unter „Pläne“ Übungsauswahlen anlegen (z. B. „Tag A“). Beim Start wählen; im Training lassen sich alle Übungen einblenden.
 - **Umfang & Entwicklung:** Zeitraum (3 Monate pro Woche, 12 Monate pro Monat, gesamt pro Monat/Quartal) und Kennzahl (Sätze, Volumen, Zeit, Ausdauer-km, Trainings) wählbar. Säulen mit gleitendem Durchschnitt, Vergleich der letzten 4 Wochen, 3 Monate und des laufenden Jahres mit dem Zeitraum davor (erst, wenn dieser vollständig erfasst ist), Tabelle „Letzte 4 Wochen“ (Woche für Woche mit Veränderung zur Vorwoche, dazu die Übungen pro Woche), Tabelle pro Übung (3 Monate gegenüber den 3 Monaten davor) und ein Jahreskalender.
+- **Balance (Seite „Umfang“):** Kraftsätze nach Körperbereich (Oberkörper ziehen/drücken, Schulter/Arme, Beine & Hüfte, Rumpf & Entlastung), Verhältnis Ziehen : Drücken, Bewegungsmuster im Detail und zurückhaltende Hinweise (ab 20 Sätzen im Zeitraum). Den Bereich jeder Übung schlägt die App nach dem Namen vor; unter „Übungen“ änderbar.
+- **Rückenbefinden:** pro Training 0 (starke Beschwerden) bis 10 (beschwerdefrei) unter „Nach dem Training“. Die Statistik zeigt den Verlauf und – ab 5 bewerteten Trainings – das Rückenbefinden je Übung im Vergleich zum Durchschnitt, dazu die letzten Notizen.
 - **Statistik:** Trainings, Trainingszeit und Volumen pro Woche (12 Wochen), Tagesform pro Training und nach Wochentag, Körpergewicht.
 - **Tagesform und Körpergewicht:** unter „Nach dem Training“.
 - **Export:** Unter „Einstellungen“ als CSV (Semikolon, für Excel/Numbers).
@@ -44,8 +46,8 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 ## Datenmodell
 
 ```
-exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', back, sort_order, active)
-workouts  (id, workout_date, start_time NULL, end_time NULL, note, rpe NULL, body_weight NULL, plan_id NULL)
+exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', back, area NULL, sort_order, active)
+workouts  (id, workout_date, start_time NULL, end_time NULL, note, rpe NULL, back_score NULL, body_weight NULL, plan_id NULL)
 plans     (id, name)
 plan_exercises (plan_id → plans, exercise_id → exercises)
 sets      (id, workout_id → workouts, exercise_id → exercises, set_no, weight_kg NULL, reps NULL, duration_s NULL, distance_km NULL)
@@ -86,13 +88,13 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `ping` | GET | – |
 | `exercises` | GET | `&all=1` gibt auch ausgeblendete Übungen zurück |
 | `exercise_add` | POST | `{name, mode?: "weight"\|"time"}` |
-| `exercise_update` | POST | `{id, name?, active?, mode?, back?}` |
+| `exercise_update` | POST | `{id, name?, active?, mode?, back?, area?}` |
 | `exercise_reorder` | POST | `{ids: [..]}` in gewünschter Reihenfolge |
 | `history&exercise_id=` | GET | alle Trainings mit Sätzen dieser Übung |
 | `workouts` | GET | – |
 | `workout_create` | POST | `{date: "YYYY-MM-DD", start_time?: "HH:MM"}` |
 | `workout&id=` | GET | Training mit Sätzen, `previous` (letzte Werte je Übung) und `best` (bisheriger Bestwert je Übung) |
-| `workout_update` | POST | `{id, note?, date?, start_time?, end_time?, rpe?, body_weight?, plan_id?}` |
+| `workout_update` | POST | `{id, note?, date?, start_time?, end_time?, rpe?, back_score?, body_weight?, plan_id?}` |
 | `snapshot` | GET | alle Daten auf einmal (Grundlage für den Offline-Modus) |
 | `plan_create` / `plan_update` / `plan_delete` | POST | `{name, exercises}` / `{id, name?, exercises?}` / `{id}` |
 | `overview` | GET | letzte 5 Trainings mit ihren Übungen und letztes Datum je Übung |
