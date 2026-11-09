@@ -31,12 +31,26 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Export:** Unter „Einstellungen“ als CSV (Semikolon, für Excel/Numbers).
 - **Offline-Modus:** Alle Eingaben werden zuerst auf dem Gerät gespeichert und übertragen, sobald der Server erreichbar ist. Ein schwarzer Balken oben zeigt an, wie viele Einträge noch warten. `sw.js` hält die App-Dateien bereit, damit sich die App auch ohne Netz öffnen lässt (nur über HTTPS).
 
+## Auswertung mit Claude (optional)
+
+Auf der Startseite unter **„Auswertung mit Claude“** wählen Sie einen Zeitraum (4 Wochen, 3 Monate, 12 Monate) und stellen auf Wunsch eine Frage. Die App schickt die Trainingsdaten dieses Zeitraums (Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht, Notizen) über `api.php` an Claude (Modell Claude Opus 5.5) und zeigt eine gegliederte Auswertung: Kurzfazit, was gut läuft, Balance, Rücken, Belastung und Erholung, Vorschläge. Die letzte Auswertung bleibt auf dem Gerät gespeichert.
+
+Einrichtung:
+1. In der **Claude Console** (platform.claude.com) ein Konto anlegen, unter „Billing“ Guthaben aufladen und unter „API Keys“ einen Schlüssel erstellen. Das ist unabhängig von einem Claude-Abo; abgerechnet wird pro Nutzung (eine Auswertung kostet meist wenige Rappen).
+2. Den Schlüssel in `config.php` bei `anthropic_api_key` eintragen.
+3. Den Ordner `claude/` (mit `vendor/`, enthält das offizielle Anthropic-PHP-SDK) neben `api.php` hochladen. Der Ordner ist gross (rund 5000 Dateien); am einfachsten die ZIP-Datei auf den Server laden und dort mit dem Dateimanager des Hosters entpacken. Mit SSH-Zugang geht auch `cd claude && composer install --no-dev`.
+4. Voraussetzung: PHP 8.2 oder neuer, ausgehende Verbindungen zu api.anthropic.com. `check.php` zeigt unter „Claude-Auswertung“, ob alles bereit ist.
+
+Der API-Schlüssel bleibt auf dem Server; das Smartphone sieht ihn nie. Ohne Schlüssel bleibt die Funktion einfach aus.
+
 ## Dateien
 
 | Datei | Zweck |
 |---|---|
 | `index.html` | Oberfläche (HTML/CSS/JS, Schriften von Google Fonts) |
 | `sw.js` | Service Worker für den Offline-Betrieb (neben `index.html` ablegen) |
+| `ai_analysis.php` | Aufruf von Claude für die Trainingsauswertung (nur mit API-Schlüssel aktiv) |
+| `claude/` | `composer.json`/`composer.lock` für das Anthropic-PHP-SDK; `claude/vendor/` liegt der ZIP-Datei bei, nicht im Repository |
 | `api.php` | JSON-Schnittstelle zu MySQL (PDO mit vorbereiteten Abfragen) |
 | `schema.sql` | Tabellen und Grundübungen |
 | `config.sample.php` | Vorlage für die Zugangsdaten → als `config.php` kopieren |
@@ -95,6 +109,7 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `workout_create` | POST | `{date: "YYYY-MM-DD", start_time?: "HH:MM"}` |
 | `workout&id=` | GET | Training mit Sätzen, `previous` (letzte Werte je Übung) und `best` (bisheriger Bestwert je Übung) |
 | `workout_update` | POST | `{id, note?, date?, start_time?, end_time?, rpe?, back_score?, body_weight?, plan_id?}` |
+| `ai_analysis` | POST | `{data, question?, range}` → `{text}`; braucht `anthropic_api_key` |
 | `snapshot` | GET | alle Daten auf einmal (Grundlage für den Offline-Modus) |
 | `plan_create` / `plan_update` / `plan_delete` | POST | `{name, exercises}` / `{id, name?, exercises?}` / `{id}` |
 | `overview` | GET | letzte 5 Trainings mit ihren Übungen und letztes Datum je Übung |

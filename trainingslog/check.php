@@ -109,6 +109,20 @@ if ($cfg) {
         check('Datenbankverbindung', false, 'fehlgeschlagen: ' . htmlspecialchars($e->getMessage()));
     }
 }
+// Auswertung mit Claude (optional)
+$aiKey = $cfg && isset($cfg['anthropic_api_key']) ? trim((string)$cfg['anthropic_api_key']) : '';
+if ($aiKey === '') {
+    check('Claude-Auswertung', true, 'nicht eingerichtet (optional) – anthropic_api_key in config.php fehlt');
+} else {
+    $aiPhp = version_compare(PHP_VERSION, '8.2.0', '>=');
+    $aiSdk = is_file(dirname(__FILE__) . '/claude/vendor/autoload.php');
+    $aiProblems = array();
+    if (!$aiPhp) $aiProblems[] = 'PHP 8.2 oder neuer nötig (jetzt ' . PHP_VERSION . ')';
+    if (!$aiSdk) $aiProblems[] = 'Ordner claude/vendor fehlt – aus der ZIP-Datei hochladen';
+    if (!extension_loaded('curl') && !ini_get('allow_url_fopen')) $aiProblems[] = 'weder cURL noch allow_url_fopen verfügbar';
+    check('Claude-Auswertung', !$aiProblems, $aiProblems ? implode('; ', $aiProblems)
+        : 'eingerichtet (Schlüssel ' . (strpos($aiKey, 'sk-ant-') === 0 ? 'beginnt mit sk-ant-' : 'hat ein unerwartetes Format') . ')');
+}
 ?><!doctype html>
 <html lang="de">
 <head>

@@ -263,6 +263,20 @@
   .rpe11 { grid-template-columns: repeat(11, 1fr); gap: 3px; }
   .rpe11 button { font-size: 15px; }
   .mng .area-sel { grid-column: 1 / -1; order: 10; min-height: 38px; padding: 6px 10px; font-size: 14px; }
+  /* Auswertung mit Claude */
+  .ai-out { scroll-margin-top: 96px; }
+  .ai-out h3 { font: 17px/1.25 var(--display); text-transform: uppercase; letter-spacing: .05em; margin: 18px 0 6px; }
+  .ai-out h3:first-of-type { margin-top: 6px; }
+  .ai-out p, .ai-out li { font-size: 15px; line-height: 1.55; }
+  .ai-out p { margin: 6px 0; }
+  .ai-out ul, .ai-out ol { margin: 6px 0; padding-left: 20px; }
+  .ai-out li { margin: 4px 0; }
+  .ai-meta { margin: 0 0 4px !important; font-size: 13px !important; }
+  .ai-loading { display: flex; align-items: center; gap: 12px; }
+  .spin { width: 20px; height: 20px; border: 3px solid var(--soft-line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+  code { font-size: 13px; background: var(--chip); padding: 1px 4px; }
   /* Einstellungen */
   .seg.wrap { flex-wrap: wrap; border: 0; gap: 6px; overflow: visible; }
   .seg.wrap span { border: 1.5px solid var(--line) !important; border-radius: 3px; }
@@ -288,7 +302,7 @@
 <script>
 // ---------- Konfiguration ----------
 const API_URL = 'api.php';          // Pfad zur PHP-API
-const API_VERSION_NEEDED = 8;       // muss zu API_VERSION in api.php passen
+const API_VERSION_NEEDED = 9;       // muss zu API_VERSION in api.php passen
 const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
   'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse', 'Fahrradfahren:cardio', 'Joggen:cardio'];
 
@@ -436,6 +450,7 @@ const ApiStore = {
       // Antwortet api.php mit einer JSON-Fehlermeldung, ist der Server da – nur die Datenbank hat ein Problem
       const err = new Error(data.error || `Fehler ${res.status}`);
       err.status = res.status;
+      err.reason = data.reason;
       err.server = res.status >= 500 || (res.headers.get('content-type')?.includes('application/json') && !!data.error);
       if (res.status >= 500 && data.error === 'Ungültige Antwort') err.message = `Serverfehler ${res.status} – bitte check.php öffnen`;
       throw err;
@@ -628,6 +643,35 @@ function makeLocalStore(key, offlineIds) {
         }),
       };
     },
+    // Auswertung mit Claude: Trainings ab einem Datum als gut lesbarer Text
+    async aiText(from) {
+      const db = this.load();
+      const ws = db.workouts.filter(w => w.date >= from).sort(this.byDate);
+      if (!ws.length) return '';
+      const wIds = new Set(ws.map(w => w.id));
+      const sets = db.sets.filter(x => wIds.has(x.workout_id));
+      const used = new Set(sets.map(x => x.exercise_id));
+      const order = Object.fromEntries(db.exercises.map((e, i) => [e.id, i]));
+      const planById = Object.fromEntries(db.plans.map(p => [p.id, p.name]));
+      const lines = ['Übungen (Name | Erfassung | Körperbereich | belastet den Rücken):'];
+      for (const e of db.exercises) if (used.has(e.id)) {
+        lines.push(`- ${e.name} | ${{ time: 'Zeit', cardio: 'Ausdauer' }[e.mode] || 'Gewicht × Wdh.'} | ${AREAS[areaOf(e)][0]} | ${e.back ? 'ja' : 'nein'}`);
+      }
+      lines.push('', `Trainings (${ws.length}, älteste zuerst):`);
+      for (const w of ws) {
+        const s = sets.filter(x => x.workout_id === w.id).sort((a, b) => order[a.exercise_id] - order[b.exercise_id] || a.set_no - b.set_no);
+        const d = workoutDuration(w, s);
+        lines.push('', [fmtDate(w.date), d ? `Dauer ${d.minutes} min` : null, w.rpe ? `Tagesform ${w.rpe}/10` : null,
+          w.back_score != null ? `Rücken ${w.back_score}/10` : null, w.body_weight ? `Körpergewicht ${fmtW(w.body_weight)} kg` : null,
+          planById[w.plan_id] ? `Plan ${planById[w.plan_id]}` : null].filter(Boolean).join(' | '));
+        if (w.note) lines.push(`  Notiz: ${w.note.replace(/\s+/g, ' ')}`);
+        const byEx = new Map();
+        for (const x of s) { if (!byEx.has(x.exercise_id)) byEx.set(x.exercise_id, []); byEx.get(x.exercise_id).push(fmtSet(x)); }
+        for (const [eid, list] of byEx) lines.push(`  ${db.exercises.find(e => e.id === eid)?.name || 'Übung'}: ${list.join(', ')}`);
+        if (!s.length) lines.push('  (keine Sätze erfasst)');
+      }
+      return lines.join('\n');
+    },
     // Export: eine Zeile pro Satz
     async exportRows() {
       const db = this.load();
@@ -719,7 +763,7 @@ const Sync = {
 
 // Mit Server: lesen und schreiben im Zwischenspeicher, Änderungen zusätzlich in die Warteschlange
 const SyncStore = { mode: 'sync' };
-for (const fn of ['exercises', 'history', 'workouts', 'overview', 'workout', 'plans', 'stats', 'analysis', 'exportRows']) {
+for (const fn of ['exercises', 'history', 'workouts', 'overview', 'workout', 'plans', 'stats', 'analysis', 'aiText', 'exportRows']) {
   SyncStore[fn] = (...a) => Cache[fn](...Sync.translate(a, Sync.applied, false));
 }
 for (const fn of ['addExercise', 'updateExercise', 'reorderExercises', 'createWorkout', 'updateWorkout', 'deleteWorkout', 'addSet', 'deleteSet', 'createPlan', 'updatePlan', 'deletePlan']) {
@@ -744,11 +788,13 @@ function remapView() {
 
 let store = PlainStore;
 let serverOutdated = false;   // api.php älter als diese index.html
+let aiState = null;           // Auswertung mit Claude: 'ok' oder Grund (no_key, php_old, no_sdk); null = unbekannt
 async function pickStore() {
   if (!navigator.onLine && Cache.hasData()) { store = SyncStore; Sync.online = false; return; }
   try {
     const pong = await ApiStore.call('ping', {}, undefined, 6000);
     serverOutdated = !(pong.version >= API_VERSION_NEEDED);
+    aiState = pong.ai || null;
   } catch (e) {
     if (e.auth) { store = SyncStore; return e; }
     // Offline oder Server-Problem: mit den Daten auf dem Gerät weiterarbeiten
@@ -854,6 +900,7 @@ function route() {
   if (h === '#plans') return showPlans();
   if (h === '#stats') return showStats();
   if (h === '#volume') return showVolume();
+  if (h === '#ai') return showAi();
   if (h === '#settings') return showSettings();
   return showHome();
 }
@@ -978,6 +1025,7 @@ async function showHome() {
     </div>
     <nav class="nav">
       <button data-go="#volume" class="wide">Umfang & Entwicklung</button>
+      <button data-go="#ai" class="wide">Auswertung mit Claude</button>
       <button data-go="#ex">Übungen</button>
       <button data-go="#plans">Pläne</button>
       <button data-go="#stats">Statistik</button>
@@ -1790,6 +1838,93 @@ function drawCalendar(host, info, ws, val, fmt) {
     const d = r.dataset.d, v = day[d] || 0;
     info.innerHTML = `<strong>${fmtDate(d)}</strong> · ${v ? fmt(v) : (ws.some(w => w.date === d) ? fmt(0) : 'kein Training')}`;
   });
+}
+
+// ---------- Ansicht: Auswertung mit Claude ----------
+// Kleines Markdown für die Antwort: Überschriften, Listen, Absätze, Fettdruck (Text wird zuerst maskiert)
+function mdToHtml(md) {
+  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const out = []; let list = null, para = [];
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.map(inline).join(' ')}</p>`); para = []; } };
+  const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.map(i => `<li>${inline(i)}</li>`).join('')}</${list.tag}>`); list = null; } };
+  for (const raw of md.split('\n')) {
+    const line = raw.trim();
+    let m;
+    if (!line) { flushPara(); flushList(); continue; }
+    if ((m = line.match(/^#{1,3}\s+(.*)$/))) { flushPara(); flushList(); out.push(`<h3>${inline(m[1])}</h3>`); continue; }
+    if ((m = line.match(/^[-*•]\s+(.*)$/)) || (m = line.match(/^\d+[.)]\s+(.*)$/))) {
+      flushPara();
+      const tag = /^\d/.test(line) ? 'ol' : 'ul';
+      if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+      list.items.push(m[1]); continue;
+    }
+    flushList(); para.push(line);
+  }
+  flushPara(); flushList();
+  return out.join('');
+}
+
+const AI_RANGES = { '4w': ['letzte 4 Wochen', -27], '3m': ['letzte 3 Monate', -90], '12m': ['letzte 12 Monate', -364] };
+const AI_SETUP = {
+  no_key: 'In <strong>config.php</strong> fehlt der API-Schlüssel (<code>anthropic_api_key</code>). Den Schlüssel erstellen Sie in der Claude Console unter „API Keys“; dort laden Sie auch Guthaben auf.',
+  php_old: 'Ihr Webhosting läuft mit einer PHP-Version unter 8.2. Bitte in der Hosting-Verwaltung auf PHP 8.2 oder neuer umstellen.',
+  no_sdk: 'Auf dem Server fehlt der Ordner <strong>claude/vendor</strong>. Bitte den Ordner <code>claude</code> aus der ZIP-Datei vollständig hochladen.',
+};
+
+async function showAi() {
+  setHeader('Auswertung', true);
+  const last = lsGet('tl_ai_last', null);
+  const lastHtml = last ? `
+    <h2>Letzte Auswertung</h2>
+    <div class="card pad ai-out">
+      <p class="muted ai-meta">${fmtDate(last.date)}, ${esc(last.time)} · ${esc(last.range)}${last.question ? ` · Frage: „${esc(last.question)}“` : ''}</p>
+      ${mdToHtml(last.text)}
+      ${last.truncated ? '<p class="muted">Die Antwort wurde gekürzt.</p>' : ''}
+    </div>` : '';
+  let block = '';
+  if (store !== SyncStore) block = 'Die Auswertung mit Claude läuft über Ihren Server. Im lokalen Modus ohne api.php ist sie nicht verfügbar.';
+  else if (!Sync.online) block = 'Sie sind offline. Für die Auswertung braucht es eine Internetverbindung.';
+  else if (aiState && aiState !== 'ok') block = `<strong>Noch nicht eingerichtet.</strong> ${AI_SETUP[aiState] || ''}`;
+  const pref = lsGet('tl_ai_pref', { range: '4w' });
+  app.innerHTML = `
+    ${block ? `<div class="card pad">${block}</div>` : `
+    <div class="card pad">
+      <label>Zeitraum</label>
+      <div class="seg wrap" role="radiogroup">${Object.entries(AI_RANGES).map(([k, [l]]) =>
+        `<label><input type="radio" name="aiRange" value="${k}" ${k === pref.range ? 'checked' : ''}><span>${l.replace('letzte ', '')}</span></label>`).join('')}</div>
+      <div class="field" style="margin-top:14px"><label for="aiQ">Ihre Frage (optional)</label>
+        <textarea id="aiQ" maxlength="500" placeholder="z. B. Trainiere ich ausgewogen genug für meinen Rücken?"></textarea></div>
+      <button class="primary" id="aiGo" style="width:100%;margin-top:12px">Auswertung erstellen</button>
+      <p class="muted hint">Die Trainingsdaten des Zeitraums – Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht und Notizen – werden über Ihren Server an Claude (Anthropic) gesendet. Die Kosten trägt Ihr API-Konto, meist wenige Rappen pro Auswertung.</p>
+    </div>
+    <div id="aiResult"></div>`}
+    ${lastHtml}`;
+  if (block) return;
+  app.querySelectorAll('input[name="aiRange"]').forEach(r => r.onchange = () => lsSet('tl_ai_pref', { range: r.value }));
+  $('#aiGo').onclick = async () => {
+    const key = app.querySelector('input[name="aiRange"]:checked')?.value || '4w';
+    const [label, days] = AI_RANGES[key];
+    const question = $('#aiQ').value.trim();
+    const data = await store.aiText(addDays(today(), days));
+    if (!data) return toast('Im gewählten Zeitraum sind keine Trainings erfasst');
+    const btn = $('#aiGo'), res = $('#aiResult');
+    btn.disabled = true;
+    res.innerHTML = '<div class="card pad ai-loading"><span class="spin" aria-hidden="true"></span> Claude wertet Ihre Trainings aus … das dauert meist 20 bis 60 Sekunden.</div>';
+    try {
+      const r = await ApiStore.call('ai_analysis', {}, { data, question, range: label }, 175000);
+      const entry = { date: today(), time: nowHM(), range: label, question, text: r.text, truncated: !!r.truncated };
+      lsSet('tl_ai_last', entry);
+      res.innerHTML = '';
+      await showAi();
+      $('.ai-out')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('Auswertung erstellt');
+    } catch (e) {
+      if (e.auth) return showLogin(e);
+      if (e.reason && AI_SETUP[e.reason]) aiState = e.reason;
+      res.innerHTML = `<div class="card pad"><strong>Die Auswertung hat nicht geklappt.</strong><p class="muted" style="margin:8px 0 0">${esc(e.network ? 'Keine Verbindung zum Server.' : e.message)}</p></div>`;
+      btn.disabled = false;
+    }
+  };
 }
 
 // ---------- Ansicht: Einstellungen & Daten ----------

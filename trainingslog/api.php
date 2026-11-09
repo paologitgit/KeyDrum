@@ -4,7 +4,7 @@ declare(strict_types=1);
 // Körperbereiche für die Auswertung „Balance“
 const AREAS = ['pull_v', 'pull_h', 'push_h', 'push_v', 'shoulder_arms', 'hinge', 'legs', 'core', 'relief', 'cardio', 'other'];
 // Version der Schnittstelle – index.html prüft, ob der Server aktuell genug ist
-const API_VERSION = 8;
+const API_VERSION = 9;
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -135,6 +135,22 @@ function timeParam($v): ?string {
 }
 function hm($t): ?string { return $t === null ? null : substr((string)$t, 0, 5); }
 
+/**
+ * Ist die Auswertung mit Claude eingerichtet? 'ok' oder der Grund, warum nicht.
+ * Benötigt: API-Schlüssel in config.php, PHP 8.2+ und das SDK im Ordner claude/vendor.
+ */
+function aiStatus(array $cfg): string {
+    if (trim((string)($cfg['anthropic_api_key'] ?? '')) === '') return 'no_key';
+    if (PHP_VERSION_ID < 80200) return 'php_old';
+    if (!is_file(__DIR__ . '/claude/vendor/autoload.php')) return 'no_sdk';
+    return 'ok';
+}
+const AI_STATUS_TEXT = [
+    'no_key' => 'Für die Auswertung mit Claude fehlt der API-Schlüssel (anthropic_api_key in config.php).',
+    'php_old' => 'Die Auswertung mit Claude braucht PHP 8.2 oder neuer. Bitte in der Hosting-Verwaltung umstellen.',
+    'no_sdk' => 'Der Ordner claude/vendor fehlt auf dem Server. Bitte aus der ZIP-Datei hochladen.',
+];
+
 /** Tagesform 1–10 oder null. */
 function rpeParam($v): ?int {
     if ($v === null || $v === '') return null;
@@ -259,7 +275,28 @@ function previousBest(PDO $db, int $workoutId): array {
 try {
     switch ($action) {
         case 'ping':
-            out(['ok' => true, 'version' => API_VERSION]);
+            out(['ok' => true, 'version' => API_VERSION, 'ai' => aiStatus($cfg)]);
+
+        case 'ai_analysis':
+            // Trainingsauswertung mit Claude: Die App schickt die Daten des gewählten Zeitraums als Text
+            if (!$isPost) fail('POST erforderlich', 405);
+            $st = aiStatus($cfg);
+            if ($st !== 'ok') out(['error' => AI_STATUS_TEXT[$st], 'reason' => $st], 400);
+            $data = trim((string)($in['data'] ?? ''));
+            $question = trim((string)($in['question'] ?? ''));
+            $range = trim((string)($in['range'] ?? ''));
+            if ($data === '') fail('Im gewählten Zeitraum sind keine Trainings erfasst.');
+            if (strlen($data) > 400000) fail('Zu viele Daten für eine Auswertung. Bitte einen kürzeren Zeitraum wählen.');
+            if (textLength($question) > 500) fail('Die Frage ist zu lang (höchstens 500 Zeichen).');
+            if (textLength($range) > 100) fail('Ungültiger Zeitraum');
+            @set_time_limit(180);
+            require_once __DIR__ . '/ai_analysis.php';
+            $prompt = "Bitte werten Sie mein Trainingstagebuch aus.\n\nZeitraum: $range\n"
+                . ($question !== '' ? "Meine Frage dazu: $question\n" : '')
+                . "\n<trainingsdaten>\n$data\n</trainingsdaten>";
+            $r = aiAnalysis(trim((string)$cfg['anthropic_api_key']), $prompt);
+            if (isset($r['error'])) fail($r['error'], 502);
+            out($r);
 
         case 'exercises':
             $where = empty($_GET['all']) ? 'WHERE active = 1' : '';
