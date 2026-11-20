@@ -4,7 +4,7 @@ declare(strict_types=1);
 // Körperbereiche für die Auswertung „Balance“
 const AREAS = ['pull_v', 'pull_h', 'push_h', 'push_v', 'shoulder_arms', 'hinge', 'legs', 'core', 'relief', 'cardio', 'other'];
 // Version der Schnittstelle – index.html prüft, ob der Server aktuell genug ist
-const API_VERSION = 9;
+const API_VERSION = 10;
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -76,6 +76,7 @@ function ensureSchema(PDO $db): void {
         $hasPlans = (bool)$db->query("SHOW TABLES LIKE 'plans'")->fetch();
         $hasDistance = $hasColumn('sets', 'distance_km');
         $hasBack = $hasColumn('exercises', 'back');
+        $hasAssisted = $hasColumn('exercises', 'assisted');
         $hasArea = $hasColumn('exercises', 'area');
     } catch (PDOException $e) {
         return; // Tabellen fehlen – wird später mit klarer Meldung gemeldet
@@ -102,6 +103,11 @@ function ensureSchema(PDO $db): void {
             // Körperbereich pro Übung (leer = App ordnet nach dem Namen zu) und Rückenbefinden pro Training
             $db->exec('ALTER TABLE exercises ADD COLUMN area VARCHAR(20) NULL AFTER back');
             $db->exec('ALTER TABLE workouts ADD COLUMN back_score TINYINT UNSIGNED NULL');
+        }
+        if (!$hasAssisted) {
+            // Unterstützte Übungen (z. B. Supported Pull-ups): weniger Gewicht = stärker. Vorbelegung nach Namen.
+            $db->exec('ALTER TABLE exercises ADD COLUMN assisted TINYINT(1) NOT NULL DEFAULT 0 AFTER mode');
+            $db->exec("UPDATE exercises SET assisted = 1 WHERE mode = 'weight' AND (name LIKE '%support%' OR name LIKE '%assist%' OR name LIKE '%unterstütz%')");
         }
         if (!$hasBack) {
             // Übungen mit Rücken-Belastung: moderatere Steigerungsvorschläge. Vorbelegung nach Namen.
@@ -324,6 +330,9 @@ try {
                 $area = in_array($in['area'], AREAS, true) ? $in['area'] : null;
                 $db->prepare('UPDATE exercises SET area = ? WHERE id = ?')->execute([$area, $id]);
             }
+            if (array_key_exists('assisted', $in)) {
+                $db->prepare('UPDATE exercises SET assisted = ? WHERE id = ?')->execute([$in['assisted'] ? 1 : 0, $id]);
+            }
             if (array_key_exists('back', $in)) {
                 $db->prepare('UPDATE exercises SET back = ? WHERE id = ?')->execute([$in['back'] ? 1 : 0, $id]);
             }
@@ -366,7 +375,8 @@ try {
                 out(['id' => (int)$row['id'], 'name' => $name, 'mode' => $row['mode']]);
             }
             $max = (int)$db->query('SELECT COALESCE(MAX(sort_order), 0) FROM exercises')->fetchColumn();
-            $db->prepare('INSERT INTO exercises (name, mode, back, sort_order) VALUES (?, ?, ?, ?)')->execute([$name, $mode, empty($in['back']) ? 0 : 1, $max + 10]);
+            $db->prepare('INSERT INTO exercises (name, mode, back, assisted, sort_order) VALUES (?, ?, ?, ?, ?)')
+               ->execute([$name, $mode, empty($in['back']) ? 0 : 1, empty($in['assisted']) ? 0 : 1, $max + 10]);
             out(['id' => (int)$db->lastInsertId(), 'name' => $name, 'mode' => $mode]);
 
         case 'workouts':
@@ -440,14 +450,14 @@ try {
 
         case 'snapshot':
             // Alle Daten auf einmal – Grundlage für den Offline-Modus der App
-            $ex = $db->query('SELECT id, name, mode, back, area, active FROM exercises ORDER BY sort_order, name')->fetchAll();
+            $ex = $db->query('SELECT id, name, mode, back, assisted, area, active FROM exercises ORDER BY sort_order, name')->fetchAll();
             $wk = $db->query('SELECT id, workout_date, start_time, end_time, note, rpe, back_score, body_weight, plan_id FROM workouts')->fetchAll();
             $st = $db->query('SELECT id, workout_id, exercise_id, set_no, weight_kg, reps, duration_s, distance_km FROM sets')->fetchAll();
             $pl = $db->query('SELECT id, name FROM plans ORDER BY name')->fetchAll();
             $pe = [];
             foreach ($db->query('SELECT plan_id, exercise_id FROM plan_exercises') as $r) $pe[(int)$r['plan_id']][] = (int)$r['exercise_id'];
             out([
-                'exercises' => array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'mode' => $r['mode'], 'back' => (bool)$r['back'], 'area' => $r['area'], 'active' => (bool)$r['active']], $ex),
+                'exercises' => array_map(fn($r) => ['id' => (int)$r['id'], 'name' => $r['name'], 'mode' => $r['mode'], 'back' => (bool)$r['back'], 'assisted' => (bool)$r['assisted'], 'area' => $r['area'], 'active' => (bool)$r['active']], $ex),
                 'workouts' => array_map(fn($r) => [
                     'id' => (int)$r['id'], 'date' => $r['workout_date'], 'start_time' => hm($r['start_time']), 'end_time' => hm($r['end_time']),
                     'note' => $r['note'], 'rpe' => $r['rpe'] === null ? null : (int)$r['rpe'],

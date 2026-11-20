@@ -149,6 +149,10 @@
   .mng button { padding: 8px 10px; min-width: 44px; }
   .mng .mode-btn { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px; grid-column: 1; }
   .mng .up { grid-column: 3; }
+  .mng .flags { grid-column: 1 / -1; order: 9; display: flex; gap: 6px; flex-wrap: wrap; }
+  .mng .assist-btn { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px; color: var(--muted); border-style: dashed; }
+  .mng .assist-btn.on { background: var(--accent); color: var(--accent-text); border-style: solid; }
+  .badge.assist { background: transparent; color: var(--muted); border: 1px solid var(--soft-line); }
   .mng .back-btn { grid-column: 2; justify-self: start; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px; color: var(--muted); border-style: dashed; }
   .mng .back-btn.on { background: var(--accent); color: var(--accent-text); border-style: solid; }
   .mng .hide-btn { display: inline-flex; align-items: center; justify-content: center; }
@@ -302,7 +306,7 @@
 <script>
 // ---------- Konfiguration ----------
 const API_URL = 'api.php';          // Pfad zur PHP-API
-const API_VERSION_NEEDED = 9;       // muss zu API_VERSION in api.php passen
+const API_VERSION_NEEDED = 10;      // muss zu API_VERSION in api.php passen
 const DEFAULT_EXERCISES = ['Deadlift', 'Latzug', 'Sitting Row', 'Pull-up', 'Bankdrücken',
   'Bizeps', 'Schulter seitlich', 'Rücken', 'Butterfly reverse', 'Fahrradfahren:cardio', 'Joggen:cardio'];
 
@@ -333,6 +337,8 @@ const fmtSet = s => {
 // Übungsart: 'weight' (kg × Wdh.), 'time' (Dauer) oder 'cardio' (Distanz + Dauer). Kennzahl für Bestwert und Diagramm.
 const MODES = { weight: 'Gewicht', time: '⏱ Zeit', cardio: 'Ausdauer' };
 // Vorbelegung „belastet den Rücken“ nach dem Namen (in „Übungen“ änderbar)
+// Vorbelegung „unterstützt“ (weniger Gewicht = stärker), z. B. Supported Pull-ups
+const guessAssisted = name => /support|assist|unterstütz/i.test(name);
 const guessBack = name => /dead|kreuzheb|lat|rudern|row|pull|klimm|(^|\s)rücken|butterfly reverse|reverse fly|hyperext/i.test(name);
 // Körperbereiche für die Auswertung „Balance“: [Bezeichnung, Gruppe]
 const AREAS = {
@@ -458,7 +464,7 @@ const ApiStore = {
     return data;
   },
   snapshot() { return this.call('snapshot', {}, undefined, 20000); },
-  addExercise(name, mode = 'weight') { return this.call('exercise_add', {}, { name, mode, back: mode === 'weight' && guessBack(name) }); },
+  addExercise(name, mode = 'weight') { return this.call('exercise_add', {}, { name, mode, back: mode === 'weight' && guessBack(name), assisted: mode === 'weight' && guessAssisted(name) }); },
   updateExercise(id, fields) { return this.call('exercise_update', {}, { id, ...fields }); },
   reorderExercises(ids) { return this.call('exercise_reorder', {}, { ids }); },
   createWorkout(date, start_time = null, plan_id = null) { return this.call('workout_create', {}, { date, start_time, plan_id }); },
@@ -504,7 +510,7 @@ function makeLocalStore(key, offlineIds) {
       const db = this.load();
       const ex = db.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
       if (ex) { ex.active = true; this.save(db); return ex; }
-      const e = { id: this.nextId(db), name, mode, back: mode === 'weight' && guessBack(name), active: true }; db.exercises.push(e); this.save(db); return e;
+      const e = { id: this.nextId(db), name, mode, back: mode === 'weight' && guessBack(name), assisted: mode === 'weight' && guessAssisted(name), active: true }; db.exercises.push(e); this.save(db); return e;
     },
     async updateExercise(id, fields) {
       const db = this.load(), ex = db.exercises.find(e => e.id === id);
@@ -516,6 +522,7 @@ function makeLocalStore(key, offlineIds) {
       if ('active' in fields) ex.active = !!fields.active;
       if ('mode' in fields) ex.mode = MODES[fields.mode] ? fields.mode : 'weight';
       if ('back' in fields) ex.back = !!fields.back;
+      if ('assisted' in fields) ex.assisted = !!fields.assisted;
       if ('area' in fields) ex.area = AREAS[fields.area] ? fields.area : null;
       this.save(db);
     },
@@ -585,8 +592,10 @@ function makeLocalStore(key, offlineIds) {
           if (s.length) { previous[ex.id] = { date: pw.date, sets: s.map(x => ({ weight: x.weight, reps: x.reps, duration: x.duration ?? null, distance: x.distance ?? null })) }; break; }
         }
         const es = db.sets.filter(x => x.exercise_id === ex.id && earlierIds.has(x.workout_id));
-        const maxOf = k => { const v = es.map(x => x[k]).filter(v => v != null); return v.length ? Math.max(...v) : null; };
-        if (es.length) best[ex.id] = { weight: maxOf('weight'), duration: maxOf('duration'), distance: maxOf('distance') };
+        const vals = k => es.map(x => x[k]).filter(v => v != null);
+        const maxOf = k => { const v = vals(k); return v.length ? Math.max(...v) : null; };
+        const minOf = k => { const v = vals(k); return v.length ? Math.min(...v) : null; };
+        if (es.length) best[ex.id] = { weight: maxOf('weight'), weightMin: minOf('weight'), duration: maxOf('duration'), distance: maxOf('distance') };
       }
       return {
         ...w, plan: db.plans.find(p => p.id === w.plan_id) || null,
@@ -612,13 +621,14 @@ function makeLocalStore(key, offlineIds) {
     // Auswertung: ein Eintrag pro Training (älteste zuerst)
     async stats() {
       const db = this.load();
+      const assisted = new Set(db.exercises.filter(e => e.assisted).map(e => e.id));   // zählen nicht zum Volumen
       return db.workouts.slice().sort(this.byDate).map(w => {
         const s = db.sets.filter(x => x.workout_id === w.id);
         return {
           id: w.id, date: w.date, rpe: w.rpe ?? null, back_score: w.back_score ?? null, body_weight: w.body_weight ?? null, note: w.note || null,
           exercises: [...new Set(s.map(x => x.exercise_id))],
           minutes: workoutDuration(w, s)?.minutes ?? null,
-          volume: s.reduce((sum, x) => sum + (x.weight && x.reps ? x.weight * x.reps : 0), 0),
+          volume: s.reduce((sum, x) => sum + (x.weight && x.reps && !assisted.has(x.exercise_id) ? x.weight * x.reps : 0), 0),
           distance: s.reduce((sum, x) => sum + (x.distance || 0), 0),
           set_count: s.length,
         };
@@ -628,6 +638,7 @@ function makeLocalStore(key, offlineIds) {
     async analysis() {
       const db = this.load();
       const modeOf = Object.fromEntries(db.exercises.map(e => [e.id, e.mode || 'weight']));
+      const assisted = new Set(db.exercises.filter(e => e.assisted).map(e => e.id));   // zählen nicht zum Volumen
       return {
         exercises: db.exercises.map(e => ({ id: e.id, name: e.name, mode: e.mode || 'weight', area: e.area || null })),
         workouts: db.workouts.map(w => {
@@ -636,7 +647,7 @@ function makeLocalStore(key, offlineIds) {
             date: w.date, count: 1,
             minutes: workoutDuration(w, s)?.minutes || 0,
             sets: s.filter(x => modeOf[x.exercise_id] !== 'cardio').length,
-            volume: s.reduce((sum, x) => sum + (x.weight && x.reps ? x.weight * x.reps : 0), 0),
+            volume: s.reduce((sum, x) => sum + (x.weight && x.reps && !assisted.has(x.exercise_id) ? x.weight * x.reps : 0), 0),
             km: s.reduce((sum, x) => sum + (x.distance || 0), 0),
             per: s.map(x => ({ e: x.exercise_id, cardio: modeOf[x.exercise_id] === 'cardio', km: x.distance || 0 })),
           };
@@ -655,7 +666,7 @@ function makeLocalStore(key, offlineIds) {
       const planById = Object.fromEntries(db.plans.map(p => [p.id, p.name]));
       const lines = ['Übungen (Name | Erfassung | Körperbereich | belastet den Rücken):'];
       for (const e of db.exercises) if (used.has(e.id)) {
-        lines.push(`- ${e.name} | ${{ time: 'Zeit', cardio: 'Ausdauer' }[e.mode] || 'Gewicht × Wdh.'} | ${AREAS[areaOf(e)][0]} | ${e.back ? 'ja' : 'nein'}`);
+        lines.push(`- ${e.name} | ${{ time: 'Zeit', cardio: 'Ausdauer' }[e.mode] || (e.assisted ? 'Unterstützung in kg × Wdh. (weniger Unterstützung = stärker)' : 'Gewicht × Wdh.')} | ${AREAS[areaOf(e)][0]} | ${e.back ? 'ja' : 'nein'}`);
       }
       lines.push('', `Trainings (${ws.length}, älteste zuerst):`);
       for (const w of ws) {
@@ -687,7 +698,7 @@ function makeLocalStore(key, offlineIds) {
         if (!sets.length) rows.push([...head, '', '', '', '', '', '', '', '']);
         for (const s of sets) {
           const ex = exById[s.exercise_id];
-          rows.push([...head, ex?.name || '', { time: 'Zeit', cardio: 'Ausdauer' }[ex?.mode] || 'Gewicht', ex ? AREAS[areaOf(ex)][0] : '', s.set_no, num(s.weight), s.reps ?? '', s.duration ?? '', num(s.distance)]);
+          rows.push([...head, ex?.name || '', { time: 'Zeit', cardio: 'Ausdauer' }[ex?.mode] || (ex?.assisted ? 'Unterstützung' : 'Gewicht'), ex ? AREAS[areaOf(ex)][0] : '', s.set_no, num(s.weight), s.reps ?? '', s.duration ?? '', num(s.distance)]);
         }
       }
       return rows;
@@ -867,10 +878,22 @@ $('#restStop').onclick = () => Rest.stop();
 // Nur bei Gewichts-Übungen und nur, wenn beim letzten Mal ein Satz mehr als 14 Wdh. hatte.
 // Vorschlag: Gewicht dieses Satzes plus Steigerung – bei Rücken-Übungen nur die Hälfte.
 const SUGGEST_MIN_REPS = 15;
-function suggestion(mode, prevSets, back) {
+// Bei unterstützten Übungen umgekehrt: weniger Unterstützung vorschlagen.
+function suggestion(mode, prevSets, back, assisted) {
   if (mode !== 'weight' || !prevSets?.length) return null;
   const high = prevSets.filter(s => s.weight != null && s.reps >= SUGGEST_MIN_REPS);
   if (!high.length) return null;
+  if (assisted) {
+    const low = high.reduce((a, b) => b.weight < a.weight || (b.weight === a.weight && b.reps > a.reps) ? b : a);
+    if (low.weight <= 0) return null;   // bereits ohne Unterstützung
+    const step = Math.min(back ? settings.step / 2 : settings.step, low.weight);
+    const next = Math.round((low.weight - step) * 100) / 100;
+    return {
+      weight: next, reps: null, label: `${fmtW(next)} kg Unterstützung`,
+      plus: `−${fmtW(step)} kg${back ? ' · Rücken: moderat' : ''}`,
+      why: `letztes Mal ${fmtW(low.weight)} kg Unterstützung × ${low.reps} – mehr als 14 Wiederholungen`,
+    };
+  }
   const top = high.reduce((a, b) => b.weight > a.weight || (b.weight === a.weight && b.reps > a.reps) ? b : a);
   const step = back ? settings.step / 2 : settings.step;
   const next = Math.round((top.weight + step) * 100) / 100;
@@ -1073,8 +1096,13 @@ async function showWorkout(id) {
   const hiddenByPlan = planIds ? allEx.filter(ex => ex.active && !setsBy[ex.id] && !planIds.has(ex.id)).length : 0;
   const modeOf = {};
   for (const ex of allEx) modeOf[ex.id] = ex.mode || 'weight';
-  const bestVal = exId => w.best[exId]?.[metricKey(modeOf[exId])] ?? null;
-  const isPr = (exId, set) => { const b = bestVal(exId), v = set[metricKey(modeOf[exId])]; return b !== null && v != null && v > b; };
+  const assistedOf = Object.fromEntries(allEx.map(ex => [ex.id, modeOf[ex.id] === 'weight' && !!ex.assisted]));
+  // Unterstützte Übungen: Bestwert = geringstes Gewicht
+  const bestVal = exId => (assistedOf[exId] ? w.best[exId]?.weightMin : w.best[exId]?.[metricKey(modeOf[exId])]) ?? null;
+  const isPr = (exId, set) => {
+    const b = bestVal(exId), v = set[metricKey(modeOf[exId])];
+    return b !== null && v != null && (assistedOf[exId] ? v < b : v > b);
+  };
 
   // Länger nicht gemacht: in keinem der letzten N Trainings davor und heute noch nicht erfasst
   const recentDone = new Set(w.recent.workouts.flatMap(r => r.exercises));
@@ -1112,7 +1140,7 @@ async function showWorkout(id) {
       <div class="chips">${overdue.map(ex => `<button class="chip" data-jump="${ex.id}">${esc(ex.name)}</button>`).join('')}</div>
     </div>` : ''}` + exercises.map(ex => {
     const cur = setsBy[ex.id] || [], prev = w.previous[ex.id];
-    const sug = !cur.length ? suggestion(modeOf[ex.id], prev?.sets, ex.back) : null;
+    const sug = !cur.length ? suggestion(modeOf[ex.id], prev?.sets, ex.back, ex.assisted) : null;
     // Vorbelegung: letzter Satz heute, sonst Vorschlag, sonst letzter Satz vom letzten Mal
     const fill = cur.length ? cur[cur.length - 1] : (sug ? { weight: sug.weight, reps: sug.reps, duration: sug.duration } : prev?.sets[prev.sets.length - 1]);
     const cardio = modeOf[ex.id] === 'cardio';
@@ -1124,6 +1152,7 @@ async function showWorkout(id) {
     <div class="card ex ${open ? 'open' : ''} ${isOverdue(ex) ? 'overdue' : ''}" data-ex="${ex.id}">
       <div class="ex-head">
         <span class="name">${esc(ex.name)}</span>
+        ${assistedOf[ex.id] ? '<span class="badge assist" title="weniger Gewicht = stärker">unterstützt</span>' : ''}
         ${hasPr ? '<span class="badge pr">★ Bestwert</span>' : ''}
         ${cur.length ? `<span class="badge">${cur.length}</span>` : ''}
         <span class="muted arrow">${open ? '▾' : '▸'}</span>
@@ -1137,7 +1166,7 @@ async function showWorkout(id) {
             <div class="chips">${prev.sets.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}</span>`).join('')}</div>
             ${!cur.length ? `<button class="ghost copy" style="margin-top:6px;padding-left:0">Sätze übernehmen</button>` : ''}`
           : 'Diese Übung wurde noch nie erfasst.'}
-          ${bestVal(ex.id) !== null ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtMetric(modeOf[ex.id], bestVal(ex.id))}</div>` : ''}
+          ${bestVal(ex.id) !== null ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtMetric(modeOf[ex.id], bestVal(ex.id))}${assistedOf[ex.id] ? ' Unterstützung (weniger ist besser)' : ''}</div>` : ''}
         </div>
         ${sug ? `<div class="suggest"><strong>Vorschlag: ${sug.label}</strong> <span class="plus">(${sug.plus})</span><div class="muted">${sug.why} – unten bereits eingetragen.</div></div>` : ''}
         <div><strong>Heute</strong></div>
@@ -1158,7 +1187,7 @@ async function showWorkout(id) {
           <button class="primary add">+ Satz</button>
         </div>` : `
         <div class="add-set">
-          <div><label>Gewicht (kg)</label><input class="w" inputmode="decimal" value="${fill?.weight != null ? fmtW(fill.weight) : ''}"></div>
+          <div><label>${assistedOf[ex.id] ? 'Unterstützung (kg)' : 'Gewicht (kg)'}</label><input class="w" inputmode="decimal" value="${fill?.weight != null ? fmtW(fill.weight) : ''}"></div>
           <div><label>Wdh.</label><input class="r" inputmode="numeric" placeholder="optional" value="${fill?.reps ?? ''}"></div>
           <button class="primary add">+ Satz</button>
         </div>`}
@@ -1309,13 +1338,13 @@ async function showExercises() {
   try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
-    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. Der Bereich (z. B. Ziehen, Drücken, Beine, Rumpf) wird für die Auswertung „Balance“ genutzt; die App schlägt ihn nach dem Namen vor. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. „Unterstützt“ gilt für Übungen mit Hilfe, etwa Supported Pull-ups: weniger Gewicht bedeutet dort mehr Kraft. Der Bereich (z. B. Ziehen, Drücken, Beine, Rumpf) wird für die Auswertung „Balance“ genutzt; die App schlägt ihn nach dem Namen vor. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
     <div class="card">
       ${active.map((e, i) => `
         <div class="mng" data-id="${e.id}">
           <input class="nm" value="${esc(e.name)}" maxlength="100" aria-label="Name">
           <button class="mode-btn" aria-label="Erfassung: ${MODES[e.mode] || MODES.weight} – antippen zum Wechseln">${MODES[e.mode] || MODES.weight}</button>
-          ${(e.mode || 'weight') === 'weight' ? `<button class="back-btn ${e.back ? 'on' : ''}" aria-pressed="${!!e.back}" aria-label="Belastet den Rücken: ${e.back ? 'ja' : 'nein'} – antippen zum Wechseln">Rücken</button>` : ''}
+          ${(e.mode || 'weight') === 'weight' ? `<span class="flags"><button class="assist-btn ${e.assisted ? 'on' : ''}" aria-pressed="${!!e.assisted}" aria-label="Unterstützt (weniger Gewicht = stärker): ${e.assisted ? 'ja' : 'nein'} – antippen zum Wechseln">Unterstützt</button><button class="back-btn ${e.back ? 'on' : ''}" aria-pressed="${!!e.back}" aria-label="Belastet den Rücken: ${e.back ? 'ja' : 'nein'} – antippen zum Wechseln">Rücken</button></span>` : ''}
           <button class="up" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
           <button class="down" ${i === active.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
           ${(e.mode || 'weight') !== 'cardio' ? `<select class="area-sel" aria-label="Körperbereich">
@@ -1359,6 +1388,11 @@ async function showExercises() {
     const areaSel = $('.area-sel', row);
     if (areaSel) areaSel.onchange = async () => {
       try { await store.updateExercise(exId, { area: areaSel.value || null }); active[idx].area = areaSel.value || null; toast('Bereich gespeichert'); } catch (e) { showError(e); }
+    };
+    const assistBtn = $('.assist-btn', row);
+    if (assistBtn) assistBtn.onclick = async () => {
+      const assisted = !active[idx].assisted;
+      try { await store.updateExercise(exId, { assisted }); toast(assisted ? 'Unterstützt: weniger Gewicht = stärker' : 'Markierung „unterstützt“ entfernt'); showExercises(); } catch (e) { showError(e); }
     };
     const backBtn = $('.back-btn', row);
     if (backBtn) backBtn.onclick = async () => {
@@ -1481,7 +1515,7 @@ async function showStats() {
     ${weeks.some(w => w.minutes) ? `<div class="card chart-card"><h3>Trainingszeit pro Woche</h3><div id="cTime"></div><div class="tip"></div></div>`
       : '<div class="card pad muted">Trainingszeit: Erscheint, sobald Trainings mit Start und Ende („Training beendet“) erfasst sind.</div>'}
     <div class="card chart-card"><h3>Volumen pro Woche (kg)</h3><div id="cVol"></div><div class="tip"></div>
-      <p class="muted chart-note">Gewicht × Wiederholungen aller Sätze. Sätze ohne Wiederholungen, Zeit- und Ausdauer-Übungen zählen nicht.</p></div>
+      <p class="muted chart-note">Gewicht × Wiederholungen aller Sätze. Sätze ohne Wiederholungen, Zeit-, Ausdauer- und unterstützte Übungen zählen nicht.</p></div>
     ${list.some(t => t.distance) ? `<div class="card chart-card"><h3>Ausdauer pro Woche (km)</h3><div id="cKm"></div><div class="tip"></div></div>` : ''}
     ${withRpe.length ? `
     <div class="card chart-card"><h3>Tagesform pro Training</h3><div id="cRpe"></div><div class="tip"></div></div>
@@ -1537,7 +1571,7 @@ const VOL_METRICS = {
     hint: 'Anzahl Sätze aller Kraft- und Zeit-Übungen – das verlässlichste Maß für den Trainingsumfang.' },
   volume: { label: 'Volumen', fmt: v => `${fmtInt(v)} kg`, avg: v => `${fmtInt(v)} kg`, axis: v => v >= 1000 ? `${fmtDec(v / 1000)}k` : fmtInt(v),
     steps: [100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000],
-    hint: 'Gewicht × Wiederholungen. Steigt auch, wenn Sie bei gleich vielen Sätzen schwerer trainieren.' },
+    hint: 'Gewicht × Wiederholungen. Steigt auch, wenn Sie bei gleich vielen Sätzen schwerer trainieren. Unterstützte Übungen zählen nicht mit.' },
   minutes: { label: 'Zeit', fmt: v => !v ? '0 min' : v >= 6000 ? `${fmtInt(v / 60)} h` : fmtMin(Math.round(v)), avg: v => fmtMin(Math.round(v)), axis: m => `${fmtDec(m / 60)} h`,
     steps: [30, 60, 120, 180, 300, 600, 1200, 1800, 3000, 6000, 12000],
     hint: 'Trainingsdauer: Krafttraining von Start bis Ende, Ausdauer nach der erfassten Zeit.' },
@@ -1989,13 +2023,17 @@ async function showHistory(exId) {
   setHeader(ex ? ex.name : 'Verlauf', true);
   if (!hist.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine Sätze erfasst.</div>'; return; }
 
-  // Pro Training: Höchstgewicht bzw. längste Zeit; Bestwert = besser als alle früheren Trainings
+  // Pro Training: Höchstgewicht bzw. längste Zeit; Bestwert = besser als alle früheren Trainings.
+  // Unterstützte Übungen: geringste Unterstützung pro Training, Bestwert = weniger als je zuvor.
   const mode = ex?.mode || 'weight';
-  let runningBest = -Infinity;
+  const assisted = mode === 'weight' && !!ex?.assisted;
+  let runningBest = null;
   const points = hist.map(h => {
-    const max = bestOf(mode, h.sets);
-    const pr = max > runningBest && runningBest !== -Infinity;
-    runningBest = Math.max(runningBest, max);
+    const w = h.sets.map(s => s.weight).filter(v => v != null);
+    const max = assisted ? (w.length ? Math.min(...w) : -Infinity) : bestOf(mode, h.sets);
+    if (max === -Infinity) return { ...h, max };
+    const pr = runningBest !== null && (assisted ? max < runningBest : max > runningBest);
+    runningBest = runningBest === null ? max : (assisted ? Math.min(runningBest, max) : Math.max(runningBest, max));
     return { ...h, max, pr };
   }).filter(p => p.max !== -Infinity);   // Sätze der anderen Erfassungsart haben keinen Wert
   const best = runningBest;
@@ -2011,12 +2049,13 @@ async function showHistory(exId) {
   const runner = speedPts.length && speedPts.reduce((s, p) => s + p.max, 0) / speedPts.length < 15;   // Pace statt km/h
   app.innerHTML = `
     <div class="stats ${cardio ? 'stats3' : ''}">
-      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">${cardio ? 'Längste Strecke' : 'Bestwert'}</div></div>
+      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">${cardio ? 'Längste Strecke' : assisted ? 'Geringste Unterstützung' : 'Bestwert'}</div></div>
       <div class="card stat"><div class="v">${points.length}</div><div class="l">${cardio ? 'Einheiten' : 'Trainings'}</div></div>
       ${cardio ? `<div class="card stat"><div class="v">${totalKm >= 1000 ? fmtInt(totalKm) : fmtW(Math.round(totalKm * 10) / 10)}</div><div class="l">km gesamt</div></div>` : ''}
     </div>
     <div class="card chart-card">
-      <h3>${{ time: 'Längste Zeit pro Training', cardio: 'Distanz pro Einheit (km)' }[mode] || 'Höchstgewicht pro Training (kg)'}</h3>
+      <h3>${{ time: 'Längste Zeit pro Training', cardio: 'Distanz pro Einheit (km)' }[mode] || (assisted ? 'Unterstützung pro Training (kg)' : 'Höchstgewicht pro Training (kg)')}</h3>
+      ${assisted ? '<p class="muted chart-note" style="margin-top:0">Geringste Unterstützung je Training – weniger ist besser.</p>' : ''}
       <div id="chart"></div>
       <div class="tip" id="tip"></div>
     </div>
@@ -2042,7 +2081,7 @@ async function showHistory(exId) {
     ? { fmt: v => `${fmtW(v)} km`, axisFmt: fmtW, steps: [0.5, 1, 2, 5, 10, 20, 25, 50, 100], extra: p => p.sets.length > 1 ? `${p.sets.length} Einträge` : (p.sets[0].duration ? fmtDur(p.sets[0].duration) : ''), label: 'Distanz pro Einheit' }
     : mode === 'time'
     ? { fmt: v => fmtDur(v), axisFmt: v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`, steps: [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600], extra: p => `${p.sets.length} Sätze`, label: 'Längste Zeit pro Training' }
-    : { fmt: v => `${fmtW(v)} kg`, axisFmt: fmtW, steps: [1, 2, 2.5, 5, 10, 20, 25, 50, 100], extra: p => `${p.sets.length} Sätze`, label: 'Höchstgewicht pro Training' });
+    : { fmt: v => `${fmtW(v)} kg${assisted ? ' Unterstützung' : ''}`, axisFmt: fmtW, steps: [1, 2, 2.5, 5, 10, 20, 25, 50, 100], extra: p => `${p.sets.length} Sätze`, label: assisted ? 'Unterstützung pro Training' : 'Höchstgewicht pro Training' });
 }
 
 // Linien-Diagramm: ein Wert pro Datum (points: {date, max, pr?})

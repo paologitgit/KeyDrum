@@ -34,3 +34,7 @@ UPDATE exercises SET back = 1 WHERE mode = 'weight' AND (name LIKE '%dead%' OR n
 -- 6) Körperbereich pro Übung und Rückenbefinden pro Training
 ALTER TABLE exercises ADD COLUMN area VARCHAR(20) NULL AFTER back;
 ALTER TABLE workouts ADD COLUMN back_score TINYINT UNSIGNED NULL;
+
+-- 7) Unterstützte Übungen (weniger Gewicht = stärker)
+ALTER TABLE exercises ADD COLUMN assisted TINYINT(1) NOT NULL DEFAULT 0 AFTER mode;
+UPDATE exercises SET assisted = 1 WHERE mode = 'weight' AND (name LIKE '%support%' OR name LIKE '%assist%' OR name LIKE '%unterstütz%');

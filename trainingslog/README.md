@@ -22,6 +22,7 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Ausdauer:** Übungsart „Ausdauer“ mit Distanz (km) und Dauer, z. B. Fahrradfahren und Joggen (beide sind voreingestellt). Die App zeigt das Tempo als Pace (min/km, unter 15 km/h) oder als Geschwindigkeit (km/h). Bestwert = längste Strecke; im Verlauf Diagramme für Distanz und Tempo, in der Statistik die Kilometer pro Woche.
 - **Pausentimer:** Nach jedem Satz läuft unten eine Pause (Standard 90 s, einstellbar). Am Ende vibriert das Smartphone (Android) und es ertönt ein Ton.
 - **Fortschrittsvorschlag:** Hatte beim letzten Mal ein Satz mehr als 14 Wiederholungen, schlägt die App das Gewicht dieses Satzes plus die eingestellte Steigerung vor (Standard +2,5 kg) und trägt es gleich ein. Übungen, die unter „Übungen“ als **Rücken** markiert sind, erhalten nur die halbe Steigerung. Vormarkiert (nach Namen): Deadlift, Latzug, Sitting Row, Pull-up, Rücken, Butterfly reverse.
+- **Unterstützte Übungen:** Bei Übungen wie Supported Pull-ups bedeutet weniger Gewicht mehr Kraft. Mit **Unterstützt** unter „Übungen“ wird das Gewicht als Unterstützung erfasst: Bestwert ist die geringste Unterstützung, der Vorschlag verringert die Unterstützung um die Steigerung, und die Sätze zählen nicht zum Volumen (kg × Wdh.). Namen mit „support“, „assist“ oder „unterstütz“ werden automatisch markiert.
 - **Trainingspläne:** Unter „Pläne“ Übungsauswahlen anlegen (z. B. „Tag A“). Beim Start wählen; im Training lassen sich alle Übungen einblenden.
 - **Umfang & Entwicklung:** Zeitraum (3 Monate pro Woche, 12 Monate pro Monat, gesamt pro Monat/Quartal) und Kennzahl (Sätze, Volumen, Zeit, Ausdauer-km, Trainings) wählbar. Säulen mit gleitendem Durchschnitt, Vergleich der letzten 4 Wochen, 3 Monate und des laufenden Jahres mit dem Zeitraum davor (erst, wenn dieser vollständig erfasst ist), Tabelle „Letzte 4 Wochen“ (Woche für Woche mit Veränderung zur Vorwoche, dazu die Übungen pro Woche), Tabelle pro Übung (3 Monate gegenüber den 3 Monaten davor) und ein Jahreskalender.
 - **Balance (Seite „Umfang“):** Kraftsätze nach Körperbereich (Oberkörper ziehen/drücken, Schulter/Arme, Beine & Hüfte, Rumpf & Entlastung), Verhältnis Ziehen : Drücken, Bewegungsmuster im Detail und zurückhaltende Hinweise (ab 20 Sätzen im Zeitraum). Den Bereich jeder Übung schlägt die App nach dem Namen vor; unter „Übungen“ änderbar.
@@ -60,7 +61,7 @@ Der API-Schlüssel bleibt auf dem Server; das Smartphone sieht ihn nie. Ohne Sch
 ## Datenmodell
 
 ```
-exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', back, area NULL, sort_order, active)
+exercises (id, name UNIQUE, mode 'weight'|'time'|'cardio', back, assisted, area NULL, sort_order, active)
 workouts  (id, workout_date, start_time NULL, end_time NULL, note, rpe NULL, back_score NULL, body_weight NULL, plan_id NULL)
 plans     (id, name)
 plan_exercises (plan_id → plans, exercise_id → exercises)
@@ -102,7 +103,7 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `ping` | GET | – |
 | `exercises` | GET | `&all=1` gibt auch ausgeblendete Übungen zurück |
 | `exercise_add` | POST | `{name, mode?: "weight"\|"time"}` |
-| `exercise_update` | POST | `{id, name?, active?, mode?, back?, area?}` |
+| `exercise_update` | POST | `{id, name?, active?, mode?, back?, assisted?, area?}` |
 | `exercise_reorder` | POST | `{ids: [..]}` in gewünschter Reihenfolge |
 | `history&exercise_id=` | GET | alle Trainings mit Sätzen dieser Übung |
 | `workouts` | GET | – |

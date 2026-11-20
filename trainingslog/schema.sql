@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS exercises (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name        VARCHAR(100) NOT NULL,
   mode        VARCHAR(10) NOT NULL DEFAULT 'weight',   -- 'weight' = kg × Wdh., 'time' = Dauer, 'cardio' = Distanz + Dauer
+  assisted    TINYINT(1) NOT NULL DEFAULT 0,          -- 1 = Unterstützung: weniger Gewicht = stärker
   back        TINYINT(1) NOT NULL DEFAULT 0,          -- 1 = belastet den Rücken: moderatere Steigerung
   area        VARCHAR(20) NULL,                       -- Körperbereich; leer = Zuordnung nach dem Namen
   sort_order  INT NOT NULL DEFAULT 0,
