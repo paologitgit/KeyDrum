@@ -833,8 +833,11 @@ function updateSyncBar() {
   const bar = $('#syncBar'), n = Sync.outbox.length;
   if (store !== SyncStore || (Sync.online && !n)) { bar.hidden = true; return; }
   bar.hidden = false;
+  const srv = Sync.error && Sync.error.server && navigator.onLine;   // Server antwortet, aber mit Fehler
   bar.textContent = !Sync.online
-    ? `Offline${n ? ` · ${n} ${n === 1 ? 'Eintrag wird' : 'Einträge werden'} übertragen, sobald wieder Netz da ist` : ' · Daten auf diesem Gerät'}`
+    ? srv
+      ? `Server-Fehler: ${Sync.error.message}${n ? ` · ${n} ${n === 1 ? 'Eintrag wartet' : 'Einträge warten'} auf diesem Gerät` : ' · Daten auf diesem Gerät'}`
+      : `Offline${n ? ` · ${n} ${n === 1 ? 'Eintrag wird' : 'Einträge werden'} übertragen, sobald wieder Netz da ist` : ' · Daten auf diesem Gerät'}`
     : `Überträgt ${n} ${n === 1 ? 'Eintrag' : 'Einträge'} …`;
 }
 
@@ -1976,7 +1979,9 @@ async function showSettings() {
   const seg = (name, opts, cur) => `<div class="seg wrap" role="radiogroup">${opts.map(([v, l]) =>
     `<label><input type="radio" name="${name}" value="${v}" ${String(v) === String(cur) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`;
   const syncInfo = store === SyncStore
-    ? `${Sync.online ? 'Verbunden mit dem Server' : 'Offline – Daten werden auf diesem Gerät gespeichert'}<br>
+    ? `${Sync.online ? 'Verbunden mit dem Server' : Sync.error && Sync.error.server && navigator.onLine
+        ? `Der Server meldet einen Fehler: ${esc(Sync.error.message)}<br>Bis das behoben ist, werden die Daten auf diesem Gerät gespeichert. Details zeigt check.php.`
+        : 'Offline – Daten werden auf diesem Gerät gespeichert'}<br>
        ${Sync.outbox.length ? `${Sync.outbox.length} ${Sync.outbox.length === 1 ? 'Eintrag wartet' : 'Einträge warten'} auf Übertragung` : 'Alles übertragen'}
        ${Sync.lastSync ? `<br>Letzter Abgleich: ${new Date(Sync.lastSync).toLocaleString('de-CH', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`
     : 'Lokaler Modus – kein Server eingerichtet. Die Daten liegen nur in diesem Browser.';
