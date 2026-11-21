@@ -1929,7 +1929,9 @@ async function showAi() {
     </div>` : '';
   let block = '';
   if (store !== SyncStore) block = 'Die KI-Auswertung läuft über Ihren Server. Im lokalen Modus ohne api.php ist sie nicht verfügbar.';
-  else if (!Sync.online) block = 'Sie sind offline. Für die Auswertung braucht es eine Internetverbindung.';
+  else if (!Sync.online) block = Sync.error && Sync.error.server && navigator.onLine
+    ? `<strong>Der Server meldet einen Fehler:</strong> ${esc(Sync.error.message)}<br>Die Auswertung ist möglich, sobald das behoben ist. Details zeigt check.php.`
+    : 'Sie sind offline. Für die Auswertung braucht es eine Internetverbindung.';
   else if (aiState && aiState !== 'ok') block = `<strong>Noch nicht eingerichtet.</strong> ${AI_SETUP[aiState] || ''}`;
   const pref = lsGet('tl_ai_pref', { range: '4w' });
   app.innerHTML = `
