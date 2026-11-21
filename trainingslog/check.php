@@ -110,10 +110,18 @@ if ($cfg) {
         check('Datenbankverbindung', false, 'fehlgeschlagen: ' . htmlspecialchars($e->getMessage()));
     }
 }
-// Auswertung mit Claude (optional)
+// KI-Auswertung (optional): OpenRouter oder Claude direkt
+$orKey = $cfg && isset($cfg['openrouter_api_key']) ? trim((string)$cfg['openrouter_api_key']) : '';
 $aiKey = $cfg && isset($cfg['anthropic_api_key']) ? trim((string)$cfg['anthropic_api_key']) : '';
-if ($aiKey === '') {
-    check('Claude-Auswertung', true, 'nicht eingerichtet (optional) – anthropic_api_key in config.php fehlt');
+if ($orKey !== '') {
+    $orModel = isset($cfg['openrouter_model']) && trim((string)$cfg['openrouter_model']) !== '' ? trim((string)$cfg['openrouter_model']) : 'anthropic/claude-opus-5.5';
+    $orHttp = function_exists('curl_init') || ini_get('allow_url_fopen');
+    check('KI-Auswertung (OpenRouter)', $orHttp && is_file(dirname(__FILE__) . '/ai_openrouter.php'),
+        !$orHttp ? 'weder cURL noch allow_url_fopen verfügbar – beim Hoster aktivieren lassen'
+        : (!is_file(dirname(__FILE__) . '/ai_openrouter.php') ? 'Datei ai_openrouter.php fehlt – bitte hochladen'
+        : 'eingerichtet, Modell ' . htmlspecialchars($orModel) . ' (Schlüssel ' . (strpos($orKey, 'sk-or-') === 0 ? 'beginnt mit sk-or-' : 'hat ein unerwartetes Format') . ')'));
+} elseif ($aiKey === '') {
+    check('KI-Auswertung', true, 'nicht eingerichtet (optional) – openrouter_api_key oder anthropic_api_key in config.php fehlt');
 } else {
     $aiPhp = version_compare(PHP_VERSION, '8.2.0', '>=');
     $aiSdk = is_file(dirname(__FILE__) . '/claude/vendor/autoload.php');

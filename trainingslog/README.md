@@ -32,17 +32,24 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Export:** Unter „Einstellungen“ als CSV (Semikolon, für Excel/Numbers).
 - **Offline-Modus:** Alle Eingaben werden zuerst auf dem Gerät gespeichert und übertragen, sobald der Server erreichbar ist. Ein schwarzer Balken oben zeigt an, wie viele Einträge noch warten. `sw.js` hält die App-Dateien bereit, damit sich die App auch ohne Netz öffnen lässt (nur über HTTPS).
 
-## Auswertung mit Claude (optional)
+## KI-Auswertung (optional)
 
-Auf der Startseite unter **„Auswertung mit Claude“** wählen Sie einen Zeitraum (4 Wochen, 3 Monate, 12 Monate) und stellen auf Wunsch eine Frage. Die App schickt die Trainingsdaten dieses Zeitraums (Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht, Notizen) über `api.php` an Claude (Modell Claude Opus 5.5) und zeigt eine gegliederte Auswertung: Kurzfazit, was gut läuft, Balance, Rücken, Belastung und Erholung, Vorschläge. Die letzte Auswertung bleibt auf dem Gerät gespeichert.
+Auf der Startseite unter **„Auswertung mit Claude“** (bzw. „mit KI“ bei einem anderen Modell) wählen Sie einen Zeitraum (4 Wochen, 3 Monate, 12 Monate) und stellen auf Wunsch eine Frage. Die App schickt die Trainingsdaten dieses Zeitraums (Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht, Notizen) über `api.php` an das KI-Modell und zeigt eine gegliederte Auswertung: Kurzfazit, was gut läuft, Balance, Rücken, Belastung und Erholung, Vorschläge. Die letzte Auswertung bleibt auf dem Gerät gespeichert.
 
-Einrichtung:
+Es gibt zwei Wege. Ist ein OpenRouter-Schlüssel eingetragen, wird OpenRouter verwendet.
+
+**a) Über OpenRouter** (einfacher, viele Modelle zur Auswahl)
+1. Auf **openrouter.ai** ein Konto anlegen, unter „Credits“ Guthaben aufladen und unter „Keys“ einen Schlüssel erstellen (beginnt mit `sk-or-`).
+2. In `config.php` bei `openrouter_api_key` eintragen. Bei `openrouter_model` die Modell-Kennung genau so eintragen, wie sie auf openrouter.ai/models steht (z. B. `anthropic/claude-opus-5.5`).
+3. `ai_prompt.php` und `ai_openrouter.php` neben `api.php` hochladen. Der Ordner `claude/` wird nicht gebraucht; PHP 7.4 genügt. Der Server braucht ausgehende Verbindungen zu openrouter.ai (cURL oder `allow_url_fopen`).
+
+**b) Direkt bei Anthropic**
 1. In der **Claude Console** (platform.claude.com) ein Konto anlegen, unter „Billing“ Guthaben aufladen und unter „API Keys“ einen Schlüssel erstellen. Das ist unabhängig von einem Claude-Abo; abgerechnet wird pro Nutzung (eine Auswertung kostet meist wenige Rappen).
-2. Den Schlüssel in `config.php` bei `anthropic_api_key` eintragen.
-3. Den Ordner `claude/` (mit `vendor/`, enthält das offizielle Anthropic-PHP-SDK) neben `api.php` hochladen. Der Ordner ist gross (rund 5000 Dateien); am einfachsten die ZIP-Datei auf den Server laden und dort mit dem Dateimanager des Hosters entpacken. Mit SSH-Zugang geht auch `cd claude && composer install --no-dev`.
-4. Voraussetzung: PHP 8.2 oder neuer, ausgehende Verbindungen zu api.anthropic.com. `check.php` zeigt unter „Claude-Auswertung“, ob alles bereit ist.
+2. Den Schlüssel in `config.php` bei `anthropic_api_key` eintragen (`openrouter_api_key` leer lassen).
+3. `ai_prompt.php`, `ai_analysis.php` und den Ordner `claude/` (mit `vendor/`, enthält das offizielle Anthropic-PHP-SDK) neben `api.php` hochladen. Der Ordner ist gross (rund 5000 Dateien); am einfachsten die ZIP-Datei auf den Server laden und dort mit dem Dateimanager des Hosters entpacken. Mit SSH-Zugang geht auch `cd claude && composer install --no-dev`.
+4. Voraussetzung: PHP 8.2 oder neuer, ausgehende Verbindungen zu api.anthropic.com.
 
-Der API-Schlüssel bleibt auf dem Server; das Smartphone sieht ihn nie. Ohne Schlüssel bleibt die Funktion einfach aus.
+`check.php` zeigt unter „KI-Auswertung“, ob alles bereit ist. Der API-Schlüssel bleibt auf dem Server; das Smartphone sieht ihn nie. Ohne Schlüssel bleibt die Funktion einfach aus.
 
 ## Dateien
 
@@ -50,7 +57,9 @@ Der API-Schlüssel bleibt auf dem Server; das Smartphone sieht ihn nie. Ohne Sch
 |---|---|
 | `index.html` | Oberfläche (HTML/CSS/JS, Schriften von Google Fonts) |
 | `sw.js` | Service Worker für den Offline-Betrieb (neben `index.html` ablegen) |
-| `ai_analysis.php` | Aufruf von Claude für die Trainingsauswertung (nur mit API-Schlüssel aktiv) |
+| `ai_prompt.php` | Anweisungen an das KI-Modell (gemeinsam für beide Wege) |
+| `ai_openrouter.php` | KI-Auswertung über OpenRouter (nur mit `openrouter_api_key` aktiv) |
+| `ai_analysis.php` | KI-Auswertung direkt mit Claude über das Anthropic-SDK (nur mit `anthropic_api_key` aktiv) |
 | `claude/` | `composer.json`/`composer.lock` für das Anthropic-PHP-SDK; `claude/vendor/` liegt der ZIP-Datei bei, nicht im Repository |
 | `api.php` | JSON-Schnittstelle zu MySQL (PDO mit vorbereiteten Abfragen) |
 | `schema.sql` | Tabellen und Grundübungen |
@@ -110,7 +119,7 @@ Zuerst `check.php` im Browser öffnen (z. B. `https://ihre-domain/training/check
 | `workout_create` | POST | `{date: "YYYY-MM-DD", start_time?: "HH:MM"}` |
 | `workout&id=` | GET | Training mit Sätzen, `previous` (letzte Werte je Übung) und `best` (bisheriger Bestwert je Übung) |
 | `workout_update` | POST | `{id, note?, date?, start_time?, end_time?, rpe?, back_score?, body_weight?, plan_id?}` |
-| `ai_analysis` | POST | `{data, question?, range}` → `{text}`; braucht `anthropic_api_key` |
+| `ai_analysis` | POST | `{data, question?, range}` → `{text}`; braucht `openrouter_api_key` oder `anthropic_api_key` |
 | `snapshot` | GET | alle Daten auf einmal (Grundlage für den Offline-Modus) |
 | `plan_create` / `plan_update` / `plan_delete` | POST | `{name, exercises}` / `{id, name?, exercises?}` / `{id}` |
 | `overview` | GET | letzte 5 Trainings mit ihren Übungen und letztes Datum je Übung |

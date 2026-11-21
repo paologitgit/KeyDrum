@@ -799,13 +799,21 @@ function remapView() {
 
 let store = PlainStore;
 let serverOutdated = false;   // api.php älter als diese index.html
-let aiState = null;           // Auswertung mit Claude: 'ok' oder Grund (no_key, php_old, no_sdk); null = unbekannt
+let aiState = null;           // KI-Auswertung: 'ok' oder Grund (no_key, php_old, no_sdk, no_http); null = unbekannt
+let aiInfo = { provider: 'anthropic', model: '' };   // Anbieter (anthropic | openrouter) und Modell laut Server
+// Kurzname für Knöpfe und Hinweise: „Claude“, solange ein Claude-Modell antwortet, sonst „KI“
+const aiShort = () => aiInfo.provider !== 'openrouter' || /^anthropic\//.test(aiInfo.model) ? 'Claude' : 'KI';
+// Ausführlich für den Datenschutzhinweis
+const aiLong = () => aiInfo.provider === 'openrouter'
+  ? `das Modell <strong>${esc(aiInfo.model)}</strong> über OpenRouter`
+  : 'Claude (Anthropic)';
 async function pickStore() {
   if (!navigator.onLine && Cache.hasData()) { store = SyncStore; Sync.online = false; return; }
   try {
     const pong = await ApiStore.call('ping', {}, undefined, 6000);
     serverOutdated = !(pong.version >= API_VERSION_NEEDED);
     aiState = pong.ai || null;
+    if (pong.ai_provider) aiInfo = { provider: pong.ai_provider, model: pong.ai_model || '' };
   } catch (e) {
     if (e.auth) { store = SyncStore; return e; }
     // Offline oder Server-Problem: mit den Daten auf dem Gerät weiterarbeiten
@@ -1048,7 +1056,7 @@ async function showHome() {
     </div>
     <nav class="nav">
       <button data-go="#volume" class="wide">Umfang & Entwicklung</button>
-      <button data-go="#ai" class="wide">Auswertung mit Claude</button>
+      <button data-go="#ai" class="wide">Auswertung mit ${aiShort()}</button>
       <button data-go="#ex">Übungen</button>
       <button data-go="#plans">Pläne</button>
       <button data-go="#stats">Statistik</button>
@@ -1900,9 +1908,10 @@ function mdToHtml(md) {
 
 const AI_RANGES = { '4w': ['letzte 4 Wochen', -27], '3m': ['letzte 3 Monate', -90], '12m': ['letzte 12 Monate', -364] };
 const AI_SETUP = {
-  no_key: 'In <strong>config.php</strong> fehlt der API-Schlüssel (<code>anthropic_api_key</code>). Den Schlüssel erstellen Sie in der Claude Console unter „API Keys“; dort laden Sie auch Guthaben auf.',
+  no_key: 'In <strong>config.php</strong> fehlt ein API-Schlüssel: entweder <code>openrouter_api_key</code> (Schlüssel und Guthaben unter openrouter.ai) oder <code>anthropic_api_key</code> (Claude Console unter „API Keys“).',
   php_old: 'Ihr Webhosting läuft mit einer PHP-Version unter 8.2. Bitte in der Hosting-Verwaltung auf PHP 8.2 oder neuer umstellen.',
   no_sdk: 'Auf dem Server fehlt der Ordner <strong>claude/vendor</strong>. Bitte den Ordner <code>claude</code> aus der ZIP-Datei vollständig hochladen.',
+  no_http: 'Ihr Server kann keine Verbindung nach aussen aufbauen (weder cURL noch <code>allow_url_fopen</code>). Bitte beim Hoster aktivieren lassen.',
 };
 
 async function showAi() {
@@ -1916,7 +1925,7 @@ async function showAi() {
       ${last.truncated ? '<p class="muted">Die Antwort wurde gekürzt.</p>' : ''}
     </div>` : '';
   let block = '';
-  if (store !== SyncStore) block = 'Die Auswertung mit Claude läuft über Ihren Server. Im lokalen Modus ohne api.php ist sie nicht verfügbar.';
+  if (store !== SyncStore) block = 'Die KI-Auswertung läuft über Ihren Server. Im lokalen Modus ohne api.php ist sie nicht verfügbar.';
   else if (!Sync.online) block = 'Sie sind offline. Für die Auswertung braucht es eine Internetverbindung.';
   else if (aiState && aiState !== 'ok') block = `<strong>Noch nicht eingerichtet.</strong> ${AI_SETUP[aiState] || ''}`;
   const pref = lsGet('tl_ai_pref', { range: '4w' });
@@ -1929,7 +1938,7 @@ async function showAi() {
       <div class="field" style="margin-top:14px"><label for="aiQ">Ihre Frage (optional)</label>
         <textarea id="aiQ" maxlength="500" placeholder="z. B. Trainiere ich ausgewogen genug für meinen Rücken?"></textarea></div>
       <button class="primary" id="aiGo" style="width:100%;margin-top:12px">Auswertung erstellen</button>
-      <p class="muted hint">Die Trainingsdaten des Zeitraums – Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht und Notizen – werden über Ihren Server an Claude (Anthropic) gesendet. Die Kosten trägt Ihr API-Konto, meist wenige Rappen pro Auswertung.</p>
+      <p class="muted hint">Die Trainingsdaten des Zeitraums – Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht und Notizen – werden über Ihren Server an ${aiLong()} gesendet. Die Kosten trägt Ihr API-Konto, meist wenige Rappen pro Auswertung.</p>
     </div>
     <div id="aiResult"></div>`}
     ${lastHtml}`;
@@ -1943,7 +1952,7 @@ async function showAi() {
     if (!data) return toast('Im gewählten Zeitraum sind keine Trainings erfasst');
     const btn = $('#aiGo'), res = $('#aiResult');
     btn.disabled = true;
-    res.innerHTML = '<div class="card pad ai-loading"><span class="spin" aria-hidden="true"></span> Claude wertet Ihre Trainings aus … das dauert meist 20 bis 60 Sekunden.</div>';
+    res.innerHTML = `<div class="card pad ai-loading"><span class="spin" aria-hidden="true"></span> ${aiShort() === 'Claude' ? 'Claude wertet' : 'Die KI wertet'} Ihre Trainings aus … das dauert meist 20 bis 60 Sekunden.</div>`;
     try {
       const r = await ApiStore.call('ai_analysis', {}, { data, question, range: label }, 175000);
       const entry = { date: today(), time: nowHM(), range: label, question, text: r.text, truncated: !!r.truncated };

@@ -142,19 +142,39 @@ function timeParam($v): ?string {
 function hm($t): ?string { return $t === null ? null : substr((string)$t, 0, 5); }
 
 /**
- * Ist die Auswertung mit Claude eingerichtet? 'ok' oder der Grund, warum nicht.
- * Benötigt: API-Schlüssel in config.php, PHP 8.2+ und das SDK im Ordner claude/vendor.
+ * Welcher Anbieter für die KI-Auswertung? Ist ein OpenRouter-Schlüssel eingetragen, wird OpenRouter
+ * verwendet, sonst Claude direkt bei Anthropic.
+ */
+function aiProvider(array $cfg): string {
+    return trim((string)($cfg['openrouter_api_key'] ?? '')) !== '' ? 'openrouter' : 'anthropic';
+}
+/** Modell bei OpenRouter (aus config.php, sonst Standard). */
+function aiModel(array $cfg): string {
+    if (aiProvider($cfg) !== 'openrouter') return 'Claude Opus 5.5';
+    $m = trim((string)($cfg['openrouter_model'] ?? ''));
+    return $m !== '' ? $m : 'anthropic/claude-opus-5.5';
+}
+
+/**
+ * Ist die KI-Auswertung eingerichtet? 'ok' oder der Grund, warum nicht.
+ * Claude direkt: API-Schlüssel, PHP 8.2+ und das SDK im Ordner claude/vendor.
+ * OpenRouter: Schlüssel und ausgehende HTTPS-Verbindungen (cURL oder allow_url_fopen).
  */
 function aiStatus(array $cfg): string {
+    if (aiProvider($cfg) === 'openrouter') {
+        $http = function_exists('curl_init') || filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN);
+        return $http ? 'ok' : 'no_http';
+    }
     if (trim((string)($cfg['anthropic_api_key'] ?? '')) === '') return 'no_key';
     if (PHP_VERSION_ID < 80200) return 'php_old';
     if (!is_file(__DIR__ . '/claude/vendor/autoload.php')) return 'no_sdk';
     return 'ok';
 }
 const AI_STATUS_TEXT = [
-    'no_key' => 'Für die Auswertung mit Claude fehlt der API-Schlüssel (anthropic_api_key in config.php).',
-    'php_old' => 'Die Auswertung mit Claude braucht PHP 8.2 oder neuer. Bitte in der Hosting-Verwaltung umstellen.',
+    'no_key' => 'Für die KI-Auswertung fehlt ein API-Schlüssel (openrouter_api_key oder anthropic_api_key in config.php).',
+    'php_old' => 'Die Auswertung direkt mit Claude braucht PHP 8.2 oder neuer. Bitte in der Hosting-Verwaltung umstellen oder OpenRouter verwenden.',
     'no_sdk' => 'Der Ordner claude/vendor fehlt auf dem Server. Bitte aus der ZIP-Datei hochladen.',
+    'no_http' => 'Der Server kann keine Verbindung nach aussen aufbauen (weder cURL noch allow_url_fopen). Bitte beim Hoster aktivieren lassen.',
 ];
 
 /** Tagesform 1–10 oder null. */
@@ -281,10 +301,10 @@ function previousBest(PDO $db, int $workoutId): array {
 try {
     switch ($action) {
         case 'ping':
-            out(['ok' => true, 'version' => API_VERSION, 'ai' => aiStatus($cfg)]);
+            out(['ok' => true, 'version' => API_VERSION, 'ai' => aiStatus($cfg), 'ai_provider' => aiProvider($cfg), 'ai_model' => aiModel($cfg)]);
 
         case 'ai_analysis':
-            // Trainingsauswertung mit Claude: Die App schickt die Daten des gewählten Zeitraums als Text
+            // KI-Auswertung (Claude direkt oder über OpenRouter): Die App schickt die Daten des gewählten Zeitraums als Text
             if (!$isPost) fail('POST erforderlich', 405);
             $st = aiStatus($cfg);
             if ($st !== 'ok') out(['error' => AI_STATUS_TEXT[$st], 'reason' => $st], 400);
@@ -296,11 +316,17 @@ try {
             if (textLength($question) > 500) fail('Die Frage ist zu lang (höchstens 500 Zeichen).');
             if (textLength($range) > 100) fail('Ungültiger Zeitraum');
             @set_time_limit(180);
-            require_once __DIR__ . '/ai_analysis.php';
             $prompt = "Bitte werten Sie mein Trainingstagebuch aus.\n\nZeitraum: $range\n"
                 . ($question !== '' ? "Meine Frage dazu: $question\n" : '')
                 . "\n<trainingsdaten>\n$data\n</trainingsdaten>";
-            $r = aiAnalysis(trim((string)$cfg['anthropic_api_key']), $prompt);
+            if (aiProvider($cfg) === 'openrouter') {
+                require_once __DIR__ . '/ai_openrouter.php';
+                $r = aiAnalysisOpenRouter(trim((string)$cfg['openrouter_api_key']), aiModel($cfg), $prompt,
+                    (string)($cfg['openrouter_url'] ?? OPENROUTER_URL));
+            } else {
+                require_once __DIR__ . '/ai_analysis.php';
+                $r = aiAnalysis(trim((string)$cfg['anthropic_api_key']), $prompt);
+            }
             if (isset($r['error'])) fail($r['error'], 502);
             out($r);
 
