@@ -60,12 +60,40 @@ function openRouterPost(string $url, array $headers, string $body, int $timeout)
 }
 
 /**
- * Fragt das gewählte Modell über OpenRouter nach einer Auswertung.
- * Rückgabe: ['text' => ...] oder ['error' => ...].
+ * Fragt nacheinander die Modelle der Liste, bis eines eine Auswertung liefert.
+ * Probleme mit dem Konto (Schlüssel, Guthaben) brechen sofort ab; ein fehlendes, ausgelastetes
+ * oder stummes Modell führt zum nächsten. Rückgabe: ['text' => ..., 'model' => ...] oder ['error' => ...].
  */
-function aiAnalysisOpenRouter(string $apiKey, string $model, string $prompt, string $url = OPENROUTER_URL): array
+function aiAnalysisOpenRouter(string $apiKey, array $models, string $prompt, string $url = OPENROUTER_URL, int $budget = 165): array
 {
-    $model = trim($model) !== '' ? trim($model) : OPENROUTER_DEFAULT_MODEL;
+    $models = array_values(array_filter(array_map('trim', $models), fn($m) => $m !== ''));
+    if (!$models) $models = [OPENROUTER_DEFAULT_MODEL];
+    $start = time();
+    $tried = [];
+    $r = ['error' => 'Keine Auswertung erhalten.'];
+    foreach ($models as $i => $model) {
+        $left = $budget - (time() - $start);
+        if ($i > 0 && $left < 25) break;   // zu wenig Zeit für einen weiteren Versuch
+        $r = aiAnalysisOpenRouterOne($apiKey, $model, $prompt, $url, max(10, min(150, $left)));
+        if (!isset($r['error'])) {
+            if ($tried) $r['skipped'] = $tried;
+            return $r;
+        }
+        $tried[] = $model;
+        if (empty($r['retry'])) break;
+    }
+    unset($r['retry']);
+    if (count($tried) > 1) {
+        $r['error'] = 'Keines der eingetragenen Modelle hat geantwortet (' . implode(', ', $tried) . '). Zuletzt: ' . $r['error'];
+    }
+    return $r;
+}
+
+/**
+ * Ein einzelner Versuch mit einem Modell. Bei Fehlern sagt 'retry', ob sich das nächste Modell lohnt.
+ */
+function aiAnalysisOpenRouterOne(string $apiKey, string $model, string $prompt, string $url, int $timeout): array
+{
     $body = json_encode([
         'model' => $model,
         'max_tokens' => 16000,
@@ -81,12 +109,12 @@ function aiAnalysisOpenRouter(string $apiKey, string $model, string $prompt, str
         'Content-Type: application/json',
         'Authorization: Bearer ' . $apiKey,
         'X-Title: Trainingslog',
-    ], (string)$body, 150);
+    ], (string)$body, $timeout);
 
     if ($status === 0) {
-        return ['error' => $raw === 'timeout' || stripos($raw, 'timed out') !== false
-            ? 'Das Modell hat nicht rechtzeitig geantwortet. Bitte einen kürzeren Zeitraum wählen oder erneut versuchen.'
-            : 'Keine Verbindung vom Server zu OpenRouter (openrouter.ai). Bitte beim Hoster prüfen, ob ausgehende Verbindungen erlaubt sind.'];
+        return $raw === 'timeout' || stripos($raw, 'timed out') !== false
+            ? ['error' => 'Das Modell hat nicht rechtzeitig geantwortet. Bitte einen kürzeren Zeitraum wählen oder erneut versuchen.', 'retry' => true]
+            : ['error' => 'Keine Verbindung vom Server zu OpenRouter (openrouter.ai). Bitte beim Hoster prüfen, ob ausgehende Verbindungen erlaubt sind.'];
     }
 
     $data = json_decode($raw, true);
@@ -97,19 +125,19 @@ function aiAnalysisOpenRouter(string $apiKey, string $model, string $prompt, str
             case 401: return ['error' => 'Der OpenRouter-Schlüssel wurde abgelehnt. Bitte openrouter_api_key in config.php prüfen.'];
             case 402: return ['error' => 'Auf Ihrem OpenRouter-Konto ist zu wenig Guthaben. Bitte unter openrouter.ai bei „Credits“ aufladen.'];
             case 403: return ['error' => 'OpenRouter hat die Anfrage abgelehnt' . ($apiMsg !== '' ? ': ' . $apiMsg : '.')];
-            case 404: return ['error' => "Das Modell „{$model}“ ist bei OpenRouter nicht verfügbar. Bitte openrouter_model in config.php prüfen (Liste: openrouter.ai/models)."];
-            case 408: return ['error' => 'Das Modell hat nicht rechtzeitig geantwortet. Bitte einen kürzeren Zeitraum wählen oder erneut versuchen.'];
-            case 429: return ['error' => 'Zu viele Anfragen in kurzer Zeit. Bitte in einer Minute erneut versuchen.'];
+            case 404: return ['error' => "Das Modell „{$model}“ ist bei OpenRouter nicht verfügbar. Bitte openrouter_model in config.php prüfen (Liste: openrouter.ai/models).", 'retry' => true];
+            case 408: return ['error' => 'Das Modell hat nicht rechtzeitig geantwortet. Bitte einen kürzeren Zeitraum wählen oder erneut versuchen.', 'retry' => true];
+            case 429: return ['error' => 'Zu viele Anfragen (bei Gratis-Modellen gilt zudem ein Tageslimit). Bitte später erneut versuchen.', 'retry' => true];
             case 502:
-            case 503: return ['error' => 'Das Modell ist gerade nicht erreichbar oder ausgelastet. Bitte etwas später erneut versuchen.'];
+            case 503: return ['error' => 'Das Modell ist gerade nicht erreichbar oder ausgelastet. Bitte etwas später erneut versuchen.', 'retry' => true];
         }
         if ($apiMsg !== '' && stripos($apiMsg, 'model') !== false && stripos($apiMsg, 'valid') !== false) {
-            return ['error' => "Das Modell „{$model}“ kennt OpenRouter nicht. Bitte openrouter_model in config.php prüfen (Liste: openrouter.ai/models)."];
+            return ['error' => "Das Modell „{$model}“ kennt OpenRouter nicht. Bitte openrouter_model in config.php prüfen (Liste: openrouter.ai/models).", 'retry' => true];
         }
-        return ['error' => 'OpenRouter meldet einen Fehler' . ($apiMsg !== '' ? ': ' . $apiMsg : " (HTTP $status).")];
+        return ['error' => 'OpenRouter meldet einen Fehler' . ($apiMsg !== '' ? ': ' . $apiMsg : " (HTTP $status)."), 'retry' => $status >= 500 || $status === 400];
     }
     if (!is_array($data) || !isset($data['choices'][0])) {
-        return ['error' => 'OpenRouter hat eine unerwartete Antwort geliefert. Bitte erneut versuchen.'];
+        return ['error' => 'OpenRouter hat eine unerwartete Antwort geliefert. Bitte erneut versuchen.', 'retry' => true];
     }
 
     $choice = $data['choices'][0];
@@ -122,7 +150,7 @@ function aiAnalysisOpenRouter(string $apiKey, string $model, string $prompt, str
     if (trim($text) === '') {
         return ['error' => $finish === 'content_filter'
             ? 'Das Modell hat diese Auswertung abgelehnt. Bitte die Frage anders formulieren.'
-            : 'Das Modell hat keine Auswertung geliefert. Bitte erneut versuchen.'];
+            : 'Das Modell hat keine Auswertung geliefert. Bitte erneut versuchen.', 'retry' => true];
     }
     return [
         'text' => $text,

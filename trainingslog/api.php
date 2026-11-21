@@ -148,11 +148,19 @@ function hm($t): ?string { return $t === null ? null : substr((string)$t, 0, 5);
 function aiProvider(array $cfg): string {
     return trim((string)($cfg['openrouter_api_key'] ?? '')) !== '' ? 'openrouter' : 'anthropic';
 }
-/** Modell bei OpenRouter (aus config.php, sonst Standard). */
+/**
+ * Modelle bei OpenRouter in der gewünschten Reihenfolge. openrouter_model darf eine Liste
+ * ['a', 'b'] oder ein Text mit Kommas sein; das erste Modell ist das bevorzugte.
+ */
+function aiModels(array $cfg): array {
+    $m = $cfg['openrouter_model'] ?? '';
+    $list = is_array($m) ? $m : explode(',', (string)$m);
+    $list = array_values(array_unique(array_filter(array_map(fn($x) => trim((string)$x), $list), fn($x) => $x !== '')));
+    return $list ?: ['anthropic/claude-opus-5.5'];
+}
+/** Bevorzugtes Modell (für die Anzeige in der App). */
 function aiModel(array $cfg): string {
-    if (aiProvider($cfg) !== 'openrouter') return 'Claude Opus 5.5';
-    $m = trim((string)($cfg['openrouter_model'] ?? ''));
-    return $m !== '' ? $m : 'anthropic/claude-opus-5.5';
+    return aiProvider($cfg) === 'openrouter' ? aiModels($cfg)[0] : 'Claude Opus 5.5';
 }
 
 /**
@@ -301,7 +309,7 @@ function previousBest(PDO $db, int $workoutId): array {
 try {
     switch ($action) {
         case 'ping':
-            out(['ok' => true, 'version' => API_VERSION, 'ai' => aiStatus($cfg), 'ai_provider' => aiProvider($cfg), 'ai_model' => aiModel($cfg)]);
+            out(['ok' => true, 'version' => API_VERSION, 'ai' => aiStatus($cfg), 'ai_provider' => aiProvider($cfg), 'ai_model' => aiModel($cfg), 'ai_models' => aiProvider($cfg) === 'openrouter' ? aiModels($cfg) : []]);
 
         case 'ai_analysis':
             // KI-Auswertung (Claude direkt oder über OpenRouter): Die App schickt die Daten des gewählten Zeitraums als Text
@@ -321,7 +329,7 @@ try {
                 . "\n<trainingsdaten>\n$data\n</trainingsdaten>";
             if (aiProvider($cfg) === 'openrouter') {
                 require_once __DIR__ . '/ai_openrouter.php';
-                $r = aiAnalysisOpenRouter(trim((string)$cfg['openrouter_api_key']), aiModel($cfg), $prompt,
+                $r = aiAnalysisOpenRouter(trim((string)$cfg['openrouter_api_key']), aiModels($cfg), $prompt,
                     (string)($cfg['openrouter_url'] ?? OPENROUTER_URL));
             } else {
                 require_once __DIR__ . '/ai_analysis.php';

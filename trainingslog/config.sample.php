@@ -13,8 +13,13 @@ return [
     // a) Über OpenRouter (openrouter.ai, Schlüssel beginnt mit sk-or-…). Läuft ohne Zusatzordner und ab PHP 7.4.
     //    Ist hier ein Schlüssel eingetragen, wird OpenRouter verwendet.
     'openrouter_api_key' => '',
-    //    Modell-Kennung genau wie auf openrouter.ai/models angegeben, z. B. anthropic/claude-opus-5.5
-    'openrouter_model' => 'anthropic/claude-opus-5.5',
+    //    Modell-Kennungen genau wie auf openrouter.ai/models angegeben. Antwortet das erste Modell nicht
+    //    (nicht mehr verfügbar, ausgelastet, Limit erreicht), versucht die App das nächste. Ein einzelnes geht auch:
+    //    'openrouter_model' => 'anthropic/claude-opus-5.5',
+    'openrouter_model' => [
+        'nvidia/nemotron-3.5-super-vl:free',
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+    ],
     // b) Direkt bei Anthropic (Claude Console, beginnt mit sk-ant-…). Braucht PHP 8.2+ und den Ordner claude/vendor.
     'anthropic_api_key' => '',
     // true = genaue Fehlermeldung der Datenbank anzeigen (nur zur Fehlersuche einschalten).

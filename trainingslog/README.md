@@ -40,7 +40,7 @@ Es gibt zwei Wege. Ist ein OpenRouter-Schlüssel eingetragen, wird OpenRouter ve
 
 **a) Über OpenRouter** (einfacher, viele Modelle zur Auswahl)
 1. Auf **openrouter.ai** ein Konto anlegen, unter „Credits“ Guthaben aufladen und unter „Keys“ einen Schlüssel erstellen (beginnt mit `sk-or-`).
-2. In `config.php` bei `openrouter_api_key` eintragen. Bei `openrouter_model` die Modell-Kennung genau so eintragen, wie sie auf openrouter.ai/models steht (z. B. `anthropic/claude-opus-5.5`).
+2. In `config.php` bei `openrouter_api_key` eintragen. Bei `openrouter_model` die Modell-Kennung genau so eintragen, wie sie auf openrouter.ai/models steht (z. B. `anthropic/claude-opus-5.5`). Es dürfen auch mehrere sein, als Liste `['modell-a', 'modell-b']`: Antwortet das erste nicht (nicht mehr verfügbar, ausgelastet, Limit erreicht), versucht die App das nächste. Das ist besonders bei Gratis-Modellen (Kennung endet auf `:free`) nützlich, die ohne Vorankündigung wegfallen können. Bei Gratis-Modellen müssen Sie in den OpenRouter-Datenschutzeinstellungen meist erlauben, dass der Anbieter Anfragen speichern oder zum Training verwenden darf.
 3. `ai_prompt.php` und `ai_openrouter.php` neben `api.php` hochladen. Der Ordner `claude/` wird nicht gebraucht; PHP 7.4 genügt. Der Server braucht ausgehende Verbindungen zu openrouter.ai (cURL oder `allow_url_fopen`).
 
 **b) Direkt bei Anthropic**

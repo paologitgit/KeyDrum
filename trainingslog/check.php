@@ -114,12 +114,14 @@ if ($cfg) {
 $orKey = $cfg && isset($cfg['openrouter_api_key']) ? trim((string)$cfg['openrouter_api_key']) : '';
 $aiKey = $cfg && isset($cfg['anthropic_api_key']) ? trim((string)$cfg['anthropic_api_key']) : '';
 if ($orKey !== '') {
-    $orModel = isset($cfg['openrouter_model']) && trim((string)$cfg['openrouter_model']) !== '' ? trim((string)$cfg['openrouter_model']) : 'anthropic/claude-opus-5.5';
+    $orRaw = isset($cfg['openrouter_model']) ? $cfg['openrouter_model'] : '';
+    $orList = array_values(array_filter(array_map('trim', is_array($orRaw) ? array_map('strval', $orRaw) : explode(',', (string)$orRaw)), 'strlen'));
+    $orModel = $orList ? implode(', ', $orList) . (count($orList) > 1 ? ' (in dieser Reihenfolge)' : '') : 'anthropic/claude-opus-5.5';
     $orHttp = function_exists('curl_init') || ini_get('allow_url_fopen');
     check('KI-Auswertung (OpenRouter)', $orHttp && is_file(dirname(__FILE__) . '/ai_openrouter.php'),
         !$orHttp ? 'weder cURL noch allow_url_fopen verfügbar – beim Hoster aktivieren lassen'
         : (!is_file(dirname(__FILE__) . '/ai_openrouter.php') ? 'Datei ai_openrouter.php fehlt – bitte hochladen'
-        : 'eingerichtet, Modell ' . htmlspecialchars($orModel) . ' (Schlüssel ' . (strpos($orKey, 'sk-or-') === 0 ? 'beginnt mit sk-or-' : 'hat ein unerwartetes Format') . ')'));
+        : 'eingerichtet, ' . (count($orList) > 1 ? 'Modelle ' : 'Modell ') . htmlspecialchars($orModel) . ' (Schlüssel ' . (strpos($orKey, 'sk-or-') === 0 ? 'beginnt mit sk-or-' : 'hat ein unerwartetes Format') . ')'));
 } elseif ($aiKey === '') {
     check('KI-Auswertung', true, 'nicht eingerichtet (optional) – openrouter_api_key oder anthropic_api_key in config.php fehlt');
 } else {

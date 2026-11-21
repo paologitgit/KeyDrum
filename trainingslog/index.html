@@ -800,12 +800,12 @@ function remapView() {
 let store = PlainStore;
 let serverOutdated = false;   // api.php älter als diese index.html
 let aiState = null;           // KI-Auswertung: 'ok' oder Grund (no_key, php_old, no_sdk, no_http); null = unbekannt
-let aiInfo = { provider: 'anthropic', model: '' };   // Anbieter (anthropic | openrouter) und Modell laut Server
+let aiInfo = { provider: 'anthropic', model: '', models: [] };   // Anbieter (anthropic | openrouter) und Modell laut Server
 // Kurzname für Knöpfe und Hinweise: „Claude“, solange ein Claude-Modell antwortet, sonst „KI“
 const aiShort = () => aiInfo.provider !== 'openrouter' || /^anthropic\//.test(aiInfo.model) ? 'Claude' : 'KI';
 // Ausführlich für den Datenschutzhinweis
 const aiLong = () => aiInfo.provider === 'openrouter'
-  ? `das Modell <strong>${esc(aiInfo.model)}</strong> über OpenRouter`
+  ? `das Modell <strong>${esc(aiInfo.model)}</strong>${aiInfo.models.length > 1 ? ` (falls es nicht antwortet: ${aiInfo.models.slice(1).map(esc).join(', ')})` : ''} über OpenRouter`
   : 'Claude (Anthropic)';
 async function pickStore() {
   if (!navigator.onLine && Cache.hasData()) { store = SyncStore; Sync.online = false; return; }
@@ -813,7 +813,7 @@ async function pickStore() {
     const pong = await ApiStore.call('ping', {}, undefined, 6000);
     serverOutdated = !(pong.version >= API_VERSION_NEEDED);
     aiState = pong.ai || null;
-    if (pong.ai_provider) aiInfo = { provider: pong.ai_provider, model: pong.ai_model || '' };
+    if (pong.ai_provider) aiInfo = { provider: pong.ai_provider, model: pong.ai_model || '', models: pong.ai_models || [] };
   } catch (e) {
     if (e.auth) { store = SyncStore; return e; }
     // Offline oder Server-Problem: mit den Daten auf dem Gerät weiterarbeiten
@@ -1920,7 +1920,7 @@ async function showAi() {
   const lastHtml = last ? `
     <h2>Letzte Auswertung</h2>
     <div class="card pad ai-out">
-      <p class="muted ai-meta">${fmtDate(last.date)}, ${esc(last.time)} · ${esc(last.range)}${last.question ? ` · Frage: „${esc(last.question)}“` : ''}</p>
+      <p class="muted ai-meta">${fmtDate(last.date)}, ${esc(last.time)} · ${esc(last.range)}${last.question ? ` · Frage: „${esc(last.question)}“` : ''}${last.model && aiInfo.provider === 'openrouter' ? ` · Modell: ${esc(last.model)}` : ''}</p>
       ${mdToHtml(last.text)}
       ${last.truncated ? '<p class="muted">Die Antwort wurde gekürzt.</p>' : ''}
     </div>` : '';
@@ -1938,7 +1938,7 @@ async function showAi() {
       <div class="field" style="margin-top:14px"><label for="aiQ">Ihre Frage (optional)</label>
         <textarea id="aiQ" maxlength="500" placeholder="z. B. Trainiere ich ausgewogen genug für meinen Rücken?"></textarea></div>
       <button class="primary" id="aiGo" style="width:100%;margin-top:12px">Auswertung erstellen</button>
-      <p class="muted hint">Die Trainingsdaten des Zeitraums – Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht und Notizen – werden über Ihren Server an ${aiLong()} gesendet. Die Kosten trägt Ihr API-Konto, meist wenige Rappen pro Auswertung.</p>
+      <p class="muted hint">Die Trainingsdaten des Zeitraums – Übungen, Sätze, Dauer, Tagesform, Rückenbefinden, Körpergewicht und Notizen – werden über Ihren Server an ${aiLong()} gesendet. ${aiInfo.models.length && aiInfo.models.every(m => /:free$/.test(m)) ? 'Gratis-Modelle kosten nichts, haben aber ein Tageslimit; je nach Anbieter werden die Anfragen gespeichert oder zum Training verwendet.' : 'Die Kosten trägt Ihr API-Konto, meist wenige Rappen pro Auswertung.'}</p>
     </div>
     <div id="aiResult"></div>`}
     ${lastHtml}`;
@@ -1955,7 +1955,7 @@ async function showAi() {
     res.innerHTML = `<div class="card pad ai-loading"><span class="spin" aria-hidden="true"></span> ${aiShort() === 'Claude' ? 'Claude wertet' : 'Die KI wertet'} Ihre Trainings aus … das dauert meist 20 bis 60 Sekunden.</div>`;
     try {
       const r = await ApiStore.call('ai_analysis', {}, { data, question, range: label }, 175000);
-      const entry = { date: today(), time: nowHM(), range: label, question, text: r.text, truncated: !!r.truncated };
+      const entry = { date: today(), time: nowHM(), range: label, question, text: r.text, truncated: !!r.truncated, model: r.model || '' };
       lsSet('tl_ai_last', entry);
       res.innerHTML = '';
       await showAi();
