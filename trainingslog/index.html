@@ -101,6 +101,7 @@
   .add-set label { white-space: nowrap; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); display: block; margin-bottom: 4px; }
   .add-set button { align-self: end; }
   .add-set.four { grid-template-columns: 1.2fr 1fr 1fr auto; }
+  .add-set .opt { text-transform: none; letter-spacing: 0; font-weight: 400; }
   .add-set.four button { padding: 11px 18px; font-size: 22px; }
   .ex-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
   .hist { text-transform: uppercase; letter-spacing: .1em; font-size: 13px; }
@@ -333,6 +334,12 @@ const fmtSet = s => {
   if (s.distance != null) return [`${fmtW(s.distance)} km`, s.duration ? fmtDur(s.duration) : '', fmtPace(s)].filter(Boolean).join(' · ');
   if (s.duration != null) return (s.weight ? `${fmtW(s.weight)} kg · ` : '') + fmtDur(s.duration);
   return s.reps ? `${fmtW(s.weight)} kg × ${s.reps}` : `${fmtW(s.weight)} kg`;
+};
+// Zeit-Übungen (optional mit Gewicht): Bestwert, wenn länger als je zuvor mit gleich viel oder mehr Gewicht
+const timePr = (pairs, set) => {
+  if (!pairs?.length || set.duration == null) return false;
+  const kg = set.weight || 0, comp = pairs.filter(([w]) => w >= kg);
+  return !comp.length || set.duration > Math.max(...comp.map(([, d]) => d));
 };
 // Übungsart: 'weight' (kg × Wdh.), 'time' (Dauer) oder 'cardio' (Distanz + Dauer). Kennzahl für Bestwert und Diagramm.
 const MODES = { weight: 'Gewicht', time: '⏱ Zeit', cardio: 'Ausdauer' };
@@ -595,7 +602,9 @@ function makeLocalStore(key, offlineIds) {
         const vals = k => es.map(x => x[k]).filter(v => v != null);
         const maxOf = k => { const v = vals(k); return v.length ? Math.max(...v) : null; };
         const minOf = k => { const v = vals(k); return v.length ? Math.min(...v) : null; };
-        if (es.length) best[ex.id] = { weight: maxOf('weight'), weightMin: minOf('weight'), duration: maxOf('duration'), distance: maxOf('distance') };
+        if (es.length) best[ex.id] = { weight: maxOf('weight'), weightMin: minOf('weight'), duration: maxOf('duration'), distance: maxOf('distance'),
+          // Zeit-Übungen: [Gewicht, Zeit] aller früheren Sätze für „länger mit gleich viel oder mehr Gewicht“
+          timed: (ex.mode === 'time') ? es.filter(x => x.duration != null).map(x => [x.weight || 0, x.duration]) : undefined };
       }
       return {
         ...w, plan: db.plans.find(p => p.id === w.plan_id) || null,
@@ -666,7 +675,7 @@ function makeLocalStore(key, offlineIds) {
       const planById = Object.fromEntries(db.plans.map(p => [p.id, p.name]));
       const lines = ['Übungen (Name | Erfassung | Körperbereich | belastet den Rücken):'];
       for (const e of db.exercises) if (used.has(e.id)) {
-        lines.push(`- ${e.name} | ${{ time: 'Zeit', cardio: 'Ausdauer' }[e.mode] || (e.assisted ? 'Unterstützung in kg × Wdh. (weniger Unterstützung = stärker)' : 'Gewicht × Wdh.')} | ${AREAS[areaOf(e)][0]} | ${e.back ? 'ja' : 'nein'}`);
+        lines.push(`- ${e.name} | ${{ time: 'Zeit (teils mit Gewicht)', cardio: 'Ausdauer' }[e.mode] || (e.assisted ? 'Unterstützung in kg × Wdh. (weniger Unterstützung = stärker)' : 'Gewicht × Wdh.')} | ${AREAS[areaOf(e)][0]} | ${e.back ? 'ja' : 'nein'}`);
       }
       lines.push('', `Trainings (${ws.length}, älteste zuerst):`);
       for (const w of ws) {
@@ -1110,7 +1119,15 @@ async function showWorkout(id) {
   const assistedOf = Object.fromEntries(allEx.map(ex => [ex.id, modeOf[ex.id] === 'weight' && !!ex.assisted]));
   // Unterstützte Übungen: Bestwert = geringstes Gewicht
   const bestVal = exId => (assistedOf[exId] ? w.best[exId]?.weightMin : w.best[exId]?.[metricKey(modeOf[exId])]) ?? null;
+  // Zeit-Übungen mit Gewicht (z. B. Farmers Walk): auch ein neues Höchstgewicht zählt als Bestwert
+  // Zeit-Übungen mit Gewicht: Bestzeit mit dem schwersten bisher getragenen Gewicht, z. B. „mit 28 kg: 30 s“
+  const bestKgTxt = exId => {
+    const t = modeOf[exId] === 'time' ? w.best[exId]?.timed : null;
+    const kg = t?.length ? Math.max(...t.map(([k]) => k)) : 0;
+    return kg > 0 ? ` · mit ${fmtW(kg)} kg: ${fmtDur(Math.max(...t.filter(([k]) => k >= kg).map(([, d]) => d)))}` : '';
+  };
   const isPr = (exId, set) => {
+    if (modeOf[exId] === 'time') return timePr(w.best[exId]?.timed, set);
     const b = bestVal(exId), v = set[metricKey(modeOf[exId])];
     return b !== null && v != null && (assistedOf[exId] ? v < b : v > b);
   };
@@ -1177,7 +1194,7 @@ async function showWorkout(id) {
             <div class="chips">${prev.sets.map((s, i) => `<span class="chip">${i + 1}. ${fmtSet(s)}</span>`).join('')}</div>
             ${!cur.length ? `<button class="ghost copy" style="margin-top:6px;padding-left:0">Sätze übernehmen</button>` : ''}`
           : 'Diese Übung wurde noch nie erfasst.'}
-          ${bestVal(ex.id) !== null ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtMetric(modeOf[ex.id], bestVal(ex.id))}${assistedOf[ex.id] ? ' Unterstützung (weniger ist besser)' : ''}</div>` : ''}
+          ${bestVal(ex.id) !== null ? `<div class="muted" style="margin-top:6px">Bisheriger Bestwert: ${fmtMetric(modeOf[ex.id], bestVal(ex.id))}${assistedOf[ex.id] ? ' Unterstützung (weniger ist besser)' : ''}${bestKgTxt(ex.id)}</div>` : ''}
         </div>
         ${sug ? `<div class="suggest"><strong>Vorschlag: ${sug.label}</strong> <span class="plus">(${sug.plus})</span><div class="muted">${sug.why} – unten bereits eingetragen.</div></div>` : ''}
         <div><strong>Heute</strong></div>
@@ -1192,10 +1209,11 @@ async function showWorkout(id) {
           <div><label>Sek</label><input class="se" inputmode="numeric" value="${fillDur !== null ? fillDur % 60 : ''}" placeholder="0"></div>
           <button class="primary add">+</button>
         </div>` : timeMode ? `
-        <div class="add-set">
-          <div><label>Minuten</label><input class="mi" inputmode="numeric" value="${fillDur !== null ? Math.floor(fillDur / 60) : ''}" placeholder="0"></div>
-          <div><label>Sekunden</label><input class="se" inputmode="numeric" value="${fillDur !== null ? fillDur % 60 : ''}" placeholder="0"></div>
-          <button class="primary add">+ Satz</button>
+        <div class="add-set four">
+          <div><label>kg <span class="opt">(optional)</span></label><input class="w" inputmode="decimal" value="${fill?.weight != null ? fmtW(fill.weight) : ''}" placeholder="–"></div>
+          <div><label>Min</label><input class="mi" inputmode="numeric" value="${fillDur !== null ? Math.floor(fillDur / 60) : ''}" placeholder="0"></div>
+          <div><label>Sek</label><input class="se" inputmode="numeric" value="${fillDur !== null ? fillDur % 60 : ''}" placeholder="0"></div>
+          <button class="primary add">+</button>
         </div>` : `
         <div class="add-set">
           <div><label>${assistedOf[ex.id] ? 'Unterstützung (kg)' : 'Gewicht (kg)'}</label><input class="w" inputmode="decimal" value="${fill?.weight != null ? fmtW(fill.weight) : ''}"></div>
@@ -1298,7 +1316,9 @@ async function showWorkout(id) {
         const mi = parseNum($('.mi', card).value) || 0, se = parseNum($('.se', card).value) || 0;
         const duration = Math.round(mi * 60 + se);
         if (mi < 0 || se < 0 || duration <= 0) return toast('Bitte Zeit eingeben');
-        set = { weight: null, reps: null, duration };
+        const kg = $('.w', card).value.trim() === '' ? null : parseNum($('.w', card).value);
+        if (kg !== null && (kg < 0 || isNaN(kg))) return toast('Bitte gültiges Gewicht eingeben');
+        set = { weight: kg || null, reps: null, duration };
       } else {
         const weight = parseNum($('.w', card).value), reps = parseNum($('.r', card).value);
         if (weight === null || weight < 0) return toast('Bitte Gewicht eingeben');
@@ -1349,7 +1369,7 @@ async function showExercises() {
   try { all = await store.exercises(true); } catch (e) { return showPageError(e); }
   const active = all.filter(e => e.active), hidden = all.filter(e => !e.active);
   app.innerHTML = `
-    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. „Unterstützt“ gilt für Übungen mit Hilfe, etwa Supported Pull-ups: weniger Gewicht bedeutet dort mehr Kraft. Der Bereich (z. B. Ziehen, Drücken, Beine, Rumpf) wird für die Auswertung „Balance“ genutzt; die App schlägt ihn nach dem Namen vor. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
+    <p class="muted" style="margin:0 4px 12px">Namen direkt antippen und ändern. „Gewicht“, „Zeit“ oder „Ausdauer“ (Distanz und Dauer) legt fest, wie die Übung erfasst wird (antippen zum Wechseln). Bei „Zeit“ lässt sich pro Satz zusätzlich ein Gewicht eintragen, etwa beim Farmers Walk. „Rücken“ markiert Übungen, die den Rücken belasten – dort fallen Steigerungsvorschläge halb so groß aus. „Unterstützt“ gilt für Übungen mit Hilfe, etwa Supported Pull-ups: weniger Gewicht bedeutet dort mehr Kraft. Der Bereich (z. B. Ziehen, Drücken, Beine, Rumpf) wird für die Auswertung „Balance“ genutzt; die App schlägt ihn nach dem Namen vor. Mit den Pfeilen ändern Sie die Reihenfolge, mit dem Augen-Symbol blenden Sie eine Übung aus. Ausgeblendete Übungen behalten ihren Verlauf.</p>
     <div class="card">
       ${active.map((e, i) => `
         <div class="mng" data-id="${e.id}">
@@ -2043,16 +2063,24 @@ async function showHistory(exId) {
   // Unterstützte Übungen: geringste Unterstützung pro Training, Bestwert = weniger als je zuvor.
   const mode = ex?.mode || 'weight';
   const assisted = mode === 'weight' && !!ex?.assisted;
-  let runningBest = null;
+  let runningBest = null, runningKg = null;
+  const timedSoFar = [];
   const points = hist.map(h => {
     const w = h.sets.map(s => s.weight).filter(v => v != null);
     const max = assisted ? (w.length ? Math.min(...w) : -Infinity) : bestOf(mode, h.sets);
     if (max === -Infinity) return { ...h, max };
-    const pr = runningBest !== null && (assisted ? max < runningBest : max > runningBest);
+    // Zeit-Übungen mit Gewicht (z. B. Farmers Walk): schwerstes Gewicht je Training
+    const kg = mode === 'time' && w.length && Math.max(...w) > 0 ? Math.max(...w) : null;
+    const pr = mode === 'time'
+      ? timedSoFar.length > 0 && h.sets.some(x => timePr(timedSoFar, x))
+      : runningBest !== null && (assisted ? max < runningBest : max > runningBest);
+    if (mode === 'time') timedSoFar.push(...h.sets.filter(x => x.duration != null).map(x => [x.weight || 0, x.duration]));
     runningBest = runningBest === null ? max : (assisted ? Math.min(runningBest, max) : Math.max(runningBest, max));
-    return { ...h, max, pr };
+    if (kg !== null) runningKg = Math.max(runningKg ?? 0, kg);
+    return { ...h, max, kg, pr };
   }).filter(p => p.max !== -Infinity);   // Sätze der anderen Erfassungsart haben keinen Wert
   const best = runningBest;
+  const kgPts = mode === 'time' ? points.filter(p => p.kg !== null).map(p => ({ ...p, max: p.kg })) : [];
   if (!points.length) { app.innerHTML = '<div class="card empty">Für diese Übung sind noch keine passenden Sätze erfasst.</div>'; return; }
 
   // Ausdauer: Gesamtstrecke und Durchschnittstempo pro Einheit
@@ -2064,9 +2092,10 @@ async function showHistory(exId) {
   }).filter(Boolean) : [];
   const runner = speedPts.length && speedPts.reduce((s, p) => s + p.max, 0) / speedPts.length < 15;   // Pace statt km/h
   app.innerHTML = `
-    <div class="stats ${cardio ? 'stats3' : ''}">
-      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">${cardio ? 'Längste Strecke' : assisted ? 'Geringste Unterstützung' : 'Bestwert'}</div></div>
+    <div class="stats ${cardio || kgPts.length ? 'stats3' : ''}">
+      <div class="card stat"><div class="v">${fmtMetric(mode, best)}</div><div class="l">${cardio ? 'Längste Strecke' : assisted ? 'Geringste Unterstützung' : mode === 'time' ? 'Längste Zeit' : 'Bestwert'}</div></div>
       <div class="card stat"><div class="v">${points.length}</div><div class="l">${cardio ? 'Einheiten' : 'Trainings'}</div></div>
+      ${kgPts.length ? `<div class="card stat"><div class="v">${fmtW(runningKg)} kg</div><div class="l">Höchstgewicht</div></div>` : ''}
       ${cardio ? `<div class="card stat"><div class="v">${totalKm >= 1000 ? fmtInt(totalKm) : fmtW(Math.round(totalKm * 10) / 10)}</div><div class="l">km gesamt</div></div>` : ''}
     </div>
     <div class="card chart-card">
@@ -2075,6 +2104,7 @@ async function showHistory(exId) {
       <div id="chart"></div>
       <div class="tip" id="tip"></div>
     </div>
+    ${kgPts.length ? `<div class="card chart-card"><h3>Höchstgewicht pro Training (kg)</h3><div id="chart3"></div><div class="tip" id="tip3"></div></div>` : ''}
     ${speedPts.length ? `<div class="card chart-card"><h3>${runner ? 'Pace pro Einheit (min/km)' : 'Ø Geschwindigkeit (km/h)'}</h3><div id="chart2"></div><div class="tip" id="tip2"></div></div>` : ''}
     <h2>Alle Trainings</h2>
     <div class="card">
@@ -2088,6 +2118,10 @@ async function showHistory(exId) {
         </div>`).join('')}
     </div>`;
   app.querySelectorAll('[data-w]').forEach(el => el.onclick = () => go(`#w${el.dataset.w}`));
+  if (kgPts.length) {
+    drawChart($('#chart3'), $('#tip3'), kgPts, { fmt: v => `${fmtW(v)} kg`, axisFmt: fmtW, steps: [1, 2, 2.5, 5, 10, 20, 25, 50, 100],
+      extra: p => { const d = Math.max(...p.sets.filter(x => x.weight === p.kg).map(x => x.duration || 0)); return d ? `${fmtDur(d)} mit diesem Gewicht` : ''; }, label: 'Höchstgewicht pro Training' });
+  }
   if (speedPts.length) {
     drawChart($('#chart2'), $('#tip2'), runner ? speedPts.map(p => ({ ...p, max: Math.round(p.sec / p.km) })) : speedPts, runner
       ? { fmt: v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')} /km`, axisFmt: v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`, steps: [5, 10, 15, 30, 60, 120], extra: p => `${fmtW(p.km)} km`, label: 'Pace pro Einheit' }

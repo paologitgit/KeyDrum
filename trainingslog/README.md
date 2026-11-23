@@ -10,10 +10,10 @@ Ein Trainingstagebuch für das Smartphone: Pro Training werden Übungen, Sätze 
 - **Übungen:** Die Liste ist zu Beginn mit diesen Übungen gefüllt: Deadlift, Latzug, Sitting Row, Pull-up, Bankdrücken, Bizeps, Schulter seitlich, Rücken, Butterfly reverse.
 - **Sätze erfassen:** Gewicht (Komma oder Punkt), Wiederholungen optional, dann „+ Satz“. Das Gewicht vom letzten Satz ist bereits eingetragen.
 - **Letztes Training:** Jede Übung zeigt die Sätze aus dem letzten Training, in dem sie vorkam. Mit „Sätze übernehmen“ wird alles auf einmal kopiert.
-- **Neue Übungen** lassen sich während des Trainings unten auf der Seite hinzufügen. Dabei wählen Sie, ob die Übung mit **Gewicht** (kg × Wiederholungen) oder mit **Zeit** (Minuten und Sekunden, z. B. Plank) erfasst wird.
+- **Neue Übungen** lassen sich während des Trainings unten auf der Seite hinzufügen. Dabei wählen Sie, ob die Übung mit **Gewicht** (kg × Wiederholungen) oder mit **Zeit** (Minuten und Sekunden, z. B. Plank) erfasst wird. Bei Zeit-Übungen kann pro Satz zusätzlich ein Gewicht eingetragen werden, z. B. beim Farmers Walk.
 - **Übungen verwalten** (Startseite): umbenennen, zwischen Gewicht und Zeit wechseln, Reihenfolge mit ↑/↓ ändern, ausblenden und wieder einblenden. Ausgeblendete Übungen behalten ihren Verlauf.
 - **Notiz und Datum** pro Training lassen sich oben im Training bearbeiten. Die Notiz erscheint auch in der Trainingsliste.
-- **Bestwerte:** Ein Satz, der schwerer (bei Zeit-Übungen: länger) ist als alles bisher Erfasste, wird mit ★ markiert. Ihr bisheriger Bestwert wird angezeigt.
+- **Bestwerte:** Ein Satz, der schwerer (bei Zeit-Übungen: länger, und zwar mit gleich viel oder mehr Gewicht als bisher) ist als alles bisher Erfasste, wird mit ★ markiert. Ihr bisheriger Bestwert wird angezeigt.
 - **Verlauf** (in jeder Übung über „Verlauf ›“): Bestwert, Anzahl Trainings, Diagramm des Höchstgewichts bzw. der längsten Zeit pro Training (Punkt antippen zeigt die Werte) und eine Liste aller Trainings.
 - **Ohne Server:** Ohne erreichbare `api.php` arbeitet die App im lokalen Modus (Speicherung im Browser), damit sie sich sofort ausprobieren lässt.
 
