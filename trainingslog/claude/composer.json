@@ -1,0 +1,12 @@
+{
+    "description": "Trainingslog – offizielles Anthropic-PHP-SDK für die Trainingsauswertung mit Claude",
+    "require": {
+        "php": ">=8.2",
+        "anthropic-ai/sdk": "^1.7",
+        "guzzlehttp/guzzle": "^8.3"
+    },
+    "config": {
+        "platform": { "php": "8.2.0" },
+        "optimize-autoloader": true
+    }
+}
